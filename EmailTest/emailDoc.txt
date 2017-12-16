@@ -1,0 +1,9 @@
+SMTP2go:
+
+pssd: ArduinoEmailTesting
+
+
+1) Create SMTP Server
+https://www.smtp2go.com/
+2) User and password must be base64 encoded with utf-8 character set:
+	-> Go to : https://www.base64encode.org/

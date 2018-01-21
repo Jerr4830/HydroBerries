@@ -2,8 +2,10 @@
  * Durgin Family Farms - Hydroponics Control System
  * 
  * Read the values of the analog/digital input pins
- * Display the values on a web server using an
- * Arduino Ethernet Shield
+ * Display the values on a web server using an Arduino Ethernet Shield
+ * If there is no internet connection then the data is stored on the SD Card. 
+ * If an error occurs and there is ethernet connection then an alert email is
+ * sent to the user detailing which error occured during the operation.
  * 
  * Microcontroller:
  * 
@@ -63,7 +65,9 @@ byte ip[] = {129,21,63,177};
 
 // SMTP server to send email
 char emailServer[] = "mail.smtp2go.com";
+// port for the email server
 int emailPort = 2525;
+// body content of the email
 String emailBuffer;
 
 // Initialize the Ethernet server library
@@ -90,6 +94,9 @@ int numMins = 0;
 // number of hours
 int numHours = 0;
 
+// maximum number of hours
+int maxNumberHours = 2;
+
 
 /* Water Temperature Sensor */
 // Setup a OneWire instance for the temperature sensor
@@ -102,14 +109,7 @@ float WaterTemp;
 double avgWaterTemp = 0.0;
 double maxWaterTemp = 0.0;
 double minWaterTemp = 0.0;
-String tempStatus = "Normal";
-
-
-// Dissolved Oxygen
-double avgDO2 = 0.0;
-double maxDO2 = 0.0;
-double minDO2 = 0.0;
-String oxygenStatus = "Normal";
+String WaterTempStatus = "Normal";
 
 /* Variables for EC Sensor */
 float CalibrationEC = 2.9; // EC value of calibration solution in s/cm
@@ -124,7 +124,6 @@ float TempCoef = 0.019;   // 0.019 is considered the standard for plant nutrient
 float StartTemp = 0;
 float FinishTemp = 0;
 float KValue = 0;
-boolean CalibrateEC = true;
 int ECPin = A0;
 int ECPwr = A4;
 int RA = 1000;
@@ -156,22 +155,25 @@ volatile float WaterFlow = 0.0;
 double avgWaterFlow = 0.0;
 double maxWaterFlow = 0.0;
 double minWaterFlow = 0.0;
-String flowStatus = "Normal";
+String WaterFlowStatus = "Normal";
 
 
 bool eth_connection = true;
 
 /* Dissolved Oxygen Sensor */
 double oxygenSensor = 0.0;
-int oxygenPin = A5;
+double avgDO2 = 0.0;
+double maxDO2 = 0.0;
+double minDO2 = 0.0;
+String oxygenStatus = "Normal";
 
 /* Water Level Sensor */
 int levelPin = A10;
-double waterLevel = 25.5;
+double WaterLevel = 25.5;
 double avgWaterLevel = 0.0;
 double maxWaterLevel = 0.0;
 double minWaterLevel = 0.0;
-String levelStatus = "Normal";
+String WaterLevelStatus = "Normal";
 
 /* pH Sensor */
 int phPin = A8;
@@ -186,19 +188,25 @@ String dataDebug = "";
 
 bool debug = true;
 
+/* -----------------------------------
+ *            SYSTEM SETUP
+ * -----------------------------------
+ */
+
+
 /* Interrupt is called once a millisecond */
 SIGNAL(TIMER0_COMPA_vect) {
   uint8_t xx = digitalRead(FLOWSENSORPIN);
 
   numSeconds++;
-  /*if (numSeconds == 60000){
+  if (numSeconds == 60000){
     numSeconds = 0;
     numMins++;
     if (numMins == 60){
       numMins = 0;
       numHours++;
     }
-  }*/
+  }  
 
   if (xx == flow_LastState){
     flowratetimer++;
@@ -231,8 +239,6 @@ void useInterrupt(boolean v){
     TIMSK0 &= ~_BV(OCIE0A);
   }
 }
-
-
 
 /* 
  *  Setup sensors for Arduino board
@@ -282,9 +288,8 @@ void InitSensors(){
 /* 
  * Calibrate EC sensor 
  */
-void setKValue(){
-  Serial.println("Calibrating EC Sensor...");
-  int lcv = 1;
+void setKValue(){  
+  int lcv = 1;        // LOOP COUNTER VARIABLE
   buf = 0;
   
   tempSensor.requestTemperatures();
@@ -311,11 +316,9 @@ void setKValue(){
   RC = RC - RB;
   KValue = 1000/(RC*EC);
 
-  if (StartTemp == FinishTemp){
-    CalibrateEC = false;
+  if (StartTemp == FinishTemp){    
     Serial.println("EC Calibration Successful");
-  } else {
-    CalibrateEC = true;
+  } else {    
     Serial.println("EC Calibration Failed");
   }
 }
@@ -338,12 +341,12 @@ void setup() {
   // Initialize SD Card
   Serial.println("Initializing SD Card...");
   
-  /*if (!SD.begin(chipSelect)){   // See if the card is present and can be intialized
+  if (!SD.begin(chipSelect)){   // See if the card is present and can be intialized
     Serial.println("Card failed, or not present");
     return;
   } else {
     Serial.println("SD Card initialized.");
-  }*/
+  }
   
   
   Serial.println("setting up connection");
@@ -356,9 +359,19 @@ void setup() {
   Serial.println(Ethernet.localIP()); 
 }
 
+/*
+ * -----------------------------------------------
+ * ||||||||||||||||   MAIN LOOP   ||||||||||||||||
+ * -----------------------------------------------
+ */
 
 /*
  * Continuously read and update sensor values
+ * The sensor values are written to a file on the sd card if 
+ * there is no internet connection, otherwise the values are
+ * displayed on a website.
+ * An email is sent to the user if the sensor(s) value(s)
+ * is not within the specified limit.
  */
 void loop() {
     
@@ -370,7 +383,7 @@ void loop() {
   emailBuffer += "\n\n";
 
   dataDebug = "Getting Measurement from Sensors";
-   
+  /* Get the measurement from the sensors */
   // water temperature
   GetWaterTemp();
   // Dissolved Oxygen
@@ -381,19 +394,22 @@ void loop() {
   GetWaterFlow();
   // Water Level
   getWaterLevel();
-  // pH 
+  // pH  Sensor
   //getPH();
 
-  /*while(!client){
+  // try connection to ethernet
+  // timeout after 30 seconds.
+  while(!client){
     delay(1);
     timing++;
     if (timing > 30000){
       break;
     }
-  }*/
+  }
   
   
   // Display Sensor values on the website
+  
   if (client){
     // a http request ends with a blank line
     boolean BlankLine = true;
@@ -408,7 +424,7 @@ void loop() {
           // send a standard http response header
           client.println("HTTP/1.1 200 OK");
           client.println("Content-Type: text/html");
-          // refresh the page automatically every 60 sec
+          // keep the arduino connected to the internet
           client.println("Refresh: keep-alive");
           client.println();          
           DisplayData(client); 
@@ -434,58 +450,69 @@ void loop() {
   dataDebug = "";
   emailBuffer = "";
   // wait for 10 seconds
-  delay(1000);  
+  delay(1000); 
+
+  if (numHours >= 2){
+    logData();
+  }
 }
 
 
 /* 
- * Get Water Temperature
+ * Read the water temperature sensor data
  */
 void GetWaterTemp(){  
-  tempSensor.requestTemperatures(); 
-  float temp = tempSensor.getTempCByIndex(0);
-  Serial.println(temp);
-  WaterTemp = DallasTemperature::toFahrenheit(tempSensor.getTempCByIndex(0)); 
+  // read temperature 5 times then takes average
+  float temp = 0.0;
+  for (int lcv = 0; lcv < 5; lcv++){
+    temp += DallasTemperature::toFahrenheit(tempSensor.getTempCByIndex(0));
+    delay(1000);
+  }
+  
+  WaterTemp = temp/5;
   
   // Debugging
-  dataDebug += "\nWater Temperature Sensor \n";
+  dataDebug += "\r\nWater Temperature Sensor \r\n";
   dataDebug += "Value: ";
   dataDebug += String(WaterTemp);
-  dataDebug += (" F \n");
+  dataDebug += (" F \r\n");
   
   if (WaterTemp > 85){
     emailBuffer += "The water temperature is too hot (Water Temperature = ";
     emailBuffer += char(WaterTemp);
     emailBuffer += ")\n";
-    tempStatus = "Over the limit";
+    WaterTempStatus = "Over the limit";
   } else if (WaterTemp < 77){
     emailBuffer += "The water temperature is too cold (Water Temperature = ";
     emailBuffer += char(WaterTemp);
     emailBuffer += ")\n";
-    tempStatus = "under the limit";
+    WaterTempStatus = "under the limit";
   } else {
-    tempStatus = "Normal";
+    WaterTempStatus = "Normal";
   }
 
   dataDebug += "Status: ";
-  dataDebug += tempStatus;
-  dataDebug += "\n\n";  
+  dataDebug += WaterTempStatus;
+  dataDebug += "\r\n\n";  
 
   // wait for 100 ms
   delay(100);
 }
 
 /*
- *  Get Dissolved Oxygen
+ * Read the dissolved oxygen sensor value
  */
 void GetOxygen(){
-  oxygenSensor = analogRead(oxygenPin);
+
+  // read the oxygen value five times then average
+  oxygenSensor = 0;
+  // (update code)
 
   // Debugging
-  dataDebug += "Dissolved Oxygen Sensor \n";
+  dataDebug += "Dissolved Oxygen Sensor \r\n";
   dataDebug += "Value: ";
   dataDebug += String(oxygenSensor);
-  dataDebug += (" mg/L \n");
+  dataDebug += (" mg/L \r\n");
 
   if (oxygenSensor > 2000){
     oxygenStatus = "Over the limit";
@@ -503,7 +530,7 @@ void GetOxygen(){
 
   dataDebug += "Status: ";
   dataDebug += oxygenStatus;
-  dataDebug += "\n\n";
+  dataDebug += "\r\n\n";
   
   //wait for 100 ms
   delay(100);
@@ -532,22 +559,11 @@ void GetEC(){
   EC25 = EC/(1+TempCoef*(temp - 25.0));
   ecSensor = (EC25) * (PPMconversion*1000);
 
-  Serial.print("Rc: ");
-  Serial.print(RC);
-  Serial.print(" EC: ");
-  Serial.print(EC25);
-  Serial.print(" Simens  ");
-  Serial.print(ecSensor);
-  Serial.print(" ppm  ");
-  
-  
-
-
   // Debugging
   dataDebug += "Electrical Conductivity (EC) Sensor \n";
   dataDebug += "Value: ";
   dataDebug += String(ecSensor);
-  dataDebug += (" ppm \n");
+  dataDebug += (" ppm \r\n");
 
   // Check if EC is within Limits
   if (ecSensor > 2000){
@@ -566,7 +582,7 @@ void GetEC(){
 
   dataDebug += "Status: ";
   dataDebug += ecStatus;
-  dataDebug += "\n\n";
+  dataDebug += "\r\n\n";
   
 
   //wait for 100 ms
@@ -580,29 +596,29 @@ void GetWaterFlow(){
   WaterFlow = flow_pulses / (7.5*60);
 
   // Debugging
-  dataDebug += "Water Flow Sensor: \n";
+  dataDebug += "Water Flow Sensor: \r\n";
   dataDebug += "Value: ";
   dataDebug += String(WaterFlow);
   dataDebug += (" L/s  \n");
 
   // Check if water flow is within limits
   if (WaterFlow > 5){
-    flowStatus = "Over the limit";
+    WaterFlowStatus = "Over the limit";
     emailBuffer += "The water flow is over the limit (Water flow = ";
     emailBuffer += char(WaterFlow);
     emailBuffer += ")\n";
   } else if (WaterFlow < 0){
-    flowStatus = "Under the limit";
+    WaterFlowStatus = "Under the limit";
     emailBuffer += "EC value is under the limit (Water flow = ";
     emailBuffer += char(WaterFlow);
     emailBuffer += ")\n";
   } else {
-    flowStatus = "Normal";
+    WaterFlowStatus = "Normal";
   }
 
   dataDebug += "Status: ";
-  dataDebug += flowStatus;
-  dataDebug += "\n\n ";  
+  dataDebug += WaterFlowStatus;
+  dataDebug += "\r\n\n ";  
 
   //wait for 100 ms
   delay(100);
@@ -620,34 +636,34 @@ void getWaterLevel(){
   // Send pin low again
   digitalWrite(TRIGPIN, LOW);
   
-  waterLevel = pulseIn(ECHOPIN, HIGH,26000);
-  waterLevel = waterLevel/58;
+  WaterLevel = pulseIn(ECHOPIN, HIGH,26000);
+  WaterLevel = WaterLevel/58;
   
 
   // Debugging
-  dataDebug += "Water Level Sensor \n";
+  dataDebug += "Water Level Sensor \r\n";
   dataDebug += "Status: ";
-  dataDebug += String(waterLevel);
-  dataDebug += (" cm \n");
+  dataDebug += String(WaterLevel);
+  dataDebug += (" cm \r\n");
 
   // Level
-  if (waterLevel > 100){
-    levelStatus = "Over the limit";
+  if (WaterLevel > 100){
+    WaterLevelStatus = "Over the limit";
     emailBuffer += "EC value is over the limit (Electrical Conductivity (EC) = ";
-    emailBuffer += char(waterLevel);
+    emailBuffer += char(WaterLevel);
     emailBuffer += ")\n";
-  } else if (waterLevel < 5){
-    levelStatus = "Under the limit";
+  } else if (WaterLevel < 5){
+    WaterLevelStatus = "Under the limit";
     emailBuffer += "EC value is over the limit (Electrical Conductivity (EC) = ";
-    emailBuffer += char(waterLevel);
+    emailBuffer += char(WaterLevel);
     //emailBuffer += ")\n";
   } else {
-    levelStatus = "Normal";
+    WaterLevelStatus = "Normal";
   }
 
   dataDebug += "Status: ";
-  dataDebug += levelStatus;
-  dataDebug += "\n\n";
+  dataDebug += WaterLevelStatus;
+  dataDebug += "\r\n\n";
   
 
   //wait for 100 ms
@@ -659,13 +675,13 @@ void getWaterLevel(){
  * Get ph Sensor value
  */
 void getPH(){
-  phSensor = analogRead(phPin);
+  phSensor = 0;
 
   // Debugging
-  dataDebug += "pH Sensor";
+  dataDebug += "pH Sensor \r\n";
   dataDebug += "Value: ";
   dataDebug += String(phSensor);
-  dataDebug += ("\n");
+  dataDebug += ("\r\n");
 
   // Check if pH is within values
   if (phSensor > 10){
@@ -674,7 +690,7 @@ void getPH(){
     emailBuffer += char(phSensor);
     emailBuffer += ")\n";
   } else if (phSensor < 3){
-    ecStatus = "Under the limit";
+    phStatus = "Under the limit";
     emailBuffer += "EC value is over the limit (Electrical Conductivity (EC) = ";
     emailBuffer += char(phSensor);
     emailBuffer += ")\n";
@@ -684,7 +700,7 @@ void getPH(){
 
   dataDebug += "Status: ";
   dataDebug += phStatus;
-  dataDebug += "\n\n";
+  dataDebug += "\r\n\n";
   
 
   //wait for 100 ms
@@ -873,17 +889,13 @@ void emailFail(){
 }
 
 
-/* Display Sensor Data */
+/*
+ * Display recorded sensor data on a website.
+ * Display the data for each monitoring system
+ * in a table format.
+ */
 void DisplayData(EthernetClient client){
-  // Units for sensor values
-  String EC_units = "ppm";
-  String WaterTemp_units = "&#8457";
-  String WaterFlow_units = "liters/sec";
-  String WaterLevel_units = "cm";
-  String DO2_units = "ppm";
-  String pH_units = "";
-  
-  
+    
   /* display sensor data on website */
   client.println("<!DOCTYPE html>");
   client.println("<html lang='en'>");
@@ -898,7 +910,7 @@ void DisplayData(EthernetClient client){
   client.println("<style>");
   client.println("* { box-sizing: border-box;}");
   client.println("body { margin: 0;}");
-  client.println(".header{ background-color: black; padding: 20px; text-align: center; color: lightseagreen;}");
+  client.println(".header{ background-color: black; padding: 20px; text-align: center; color: white;}");
   client.print(" a { border: 1px solid lightseagreen; padding: 5px; color: lightseagreen: text-decoration;");
   client.print(" text-align: center; border-radius: 3px;}");
   /* create 2 equal columns that floats next to each other */
@@ -909,7 +921,7 @@ void DisplayData(EthernetClient client){
   client.println("@media (max-width:600px){ .column{ float: left; width: 100%; } }");
   client.println("</style>");
 
-  client.println("<script>");
+  /*client.println("<script>");
   client.println();
   client.println("Kvalue = '';");
   client.println();
@@ -921,17 +933,19 @@ void DisplayData(EthernetClient client){
   client.println("request.open('GET', 'ajax_inputs'+ + Kvalue + nocache, true);");
   client.println("request.send(null)");
   client.println("}");
-  client.println("</script>");
+  client.println("</script>");*/
   client.println("</head>");
   /* body */
   client.println("<body>");
   //header
   client.println("<div class='header'>");
   client.println("<h1> Hydroponic Strawberries Monitoring System</h1>");
-  client.println("<form id='txt_form'>");
+  /*client.println("<form id='txt_form'>");
   client.println("<input type='text' />");
   client.println("</form>");
-  client.println("<input type='submit' value='Send K Value' onclick='SendValue()' />");
+  client.println("<input type='submit' value='Send K Value' onclick='SendValue()' />");*/
+  client.print("Total number of modules: ");
+  client.println(NumOfModules);
   client.println("</div>");
   // Modules
   client.println("<div class='row'>");
@@ -967,11 +981,11 @@ void DisplayData(EthernetClient client){
   client.println("</td>");
   ///// units
   client.println("<td>");
-  client.println(WaterTemp_units);
+  client.println("&#8457");
   client.println("</td>");
   ///// status
   client.println("<td>");
-  client.println(tempStatus);
+  client.println(WaterTempStatus);
   client.println("</td>");
   client.println("</tr>");
   /* Water Flow */
@@ -988,11 +1002,11 @@ void DisplayData(EthernetClient client){
   client.println("</td>");
   ///// Unit
   client.println("<td>");
-  client.println(WaterFlow_units);
+  client.println("liters/sec");
   client.println("</td>");
   ///// Status
   client.println("<td>");
-  client.println(flowStatus);
+  client.println(WaterFlowStatus);
   client.println("</td>");
   client.println("</tr>");
   /* Conductivity */
@@ -1009,7 +1023,7 @@ void DisplayData(EthernetClient client){
   client.println("</td>");
   ///// Units
   client.println("<td>");
-  client.println(EC_units);
+  client.println("ppm");
   client.println("</td>");
   ///// Status
   client.println("<td>");
@@ -1030,7 +1044,7 @@ void DisplayData(EthernetClient client){
   client.println("</td>");
   // Unit
   client.println("<td>");
-  client.println(DO2_units);
+  client.println("ppm");
   client.println("</td>");
   //Status
   client.println("<td>");
@@ -1048,15 +1062,15 @@ void DisplayData(EthernetClient client){
   client.println("</td>");
   // Sensor Value
   client.println("<td>");
-  client.println(waterLevel);
+  client.println(WaterLevel);
   client.println("</td>");
   // Unit
   client.println("<td>");
-  client.println(WaterLevel_units);
+  client.println("cm");
   client.println("</td>");
   //Status
   client.println("<td>");
-  client.println(levelStatus);
+  client.println(WaterLevelStatus);
   client.println("</td>");
   client.println("</tr>");
 
@@ -1074,7 +1088,7 @@ void DisplayData(EthernetClient client){
   client.println("</td>");
   // Unit
   client.println("<td>");
-  client.println(pH_units);
+  client.println("---");
   client.println("</td>");
   //Status
   client.println("<td>");
@@ -1095,10 +1109,55 @@ void DisplayData(EthernetClient client){
  */
 void logData(){
   File dataFile = SD.open("datalog.txt",FILE_WRITE);
-
+  
   // if the file is available, write to it:
   if (dataFile) {
-    dataFile.println(dataDebug);
+    dataFile.println("Sensor Measurements");
+    dataFile.println(ModuleNumber);
+    
+    dataFile.println("Water Temperature");
+    dataFile.print("Value: ");
+    dataFile.print(WaterTemp);
+    dataFile.println(" F");
+    dataFile.print("Status: ");
+    dataFile.println(WaterTempStatus);
+    dataFile.println();
+    dataFile.println("Water Flow");
+    dataFile.print("Value: ");
+    dataFile.print(WaterFlow);
+    dataFile.println(" liters/sec");
+    dataFile.print("Status: ");
+    dataFile.println(WaterFlowStatus);
+    dataFile.println();
+    dataFile.println("Water Level");
+    dataFile.print("Value: ");
+    dataFile.print(WaterLevel);
+    dataFile.println(" cm");
+    dataFile.print("Status: ");
+    dataFile.println(WaterLevelStatus);
+    dataFile.println();
+    dataFile.println("Electrical Conductivity (EC)");
+    dataFile.print("Value: ");
+    dataFile.print(ecSensor);
+    dataFile.println(" ppm");
+    dataFile.print("Status: ");
+    dataFile.println(ecStatus);
+    dataFile.println();
+    dataFile.println("Dissolved Oxygen (DO2)");
+    dataFile.print("Value: ");
+    dataFile.print(oxygenSensor);
+    dataFile.println(" F");
+    dataFile.print("Status: ");
+    dataFile.println(oxygenStatus);
+    dataFile.println();
+    dataFile.println("pH");
+    dataFile.print("Value: ");
+    dataFile.print(phSensor);
+    dataFile.println();
+    dataFile.print("Status: ");
+    dataFile.println(phStatus);
+    dataFile.println();
+    dataFile.println();
     dataFile.close();
   } else { // if the file isn't open pop up an error
     Serial.println("Error opening datalog.txt");

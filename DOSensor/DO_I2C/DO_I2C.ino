@@ -46,7 +46,7 @@ void loop() {                   //the main loop.
     if (computerdata[0] == 'c' || computerdata[0] == 'r')time_ = 600;     //if a command has been sent to calibrate or take a reading we wait 600ms so that the circuit has time to take the reading.
     else time_ = 300;                                                     //if not 300ms will do
 
-
+   // Serial.println(computerdata);
     Wire.beginTransmission(address);                                      //call the circuit by its ID number.
     Wire.write(computerdata);                                             //transmit the command that was sent through the serial port.
     Wire.endTransmission();                                               //end the I2C data transmission.

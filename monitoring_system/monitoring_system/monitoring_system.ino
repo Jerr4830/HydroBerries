@@ -253,13 +253,7 @@ void InitSensors(){
   Serial.println("Setting up Level Sensor...");
   pinMode(levelPin, INPUT);
 
-  /* Setup Dissolved Oxygen */
-  Serial.println("Setting up Oxygen Sensor...");
-  pinMode(oxygenPin,INPUT); 
-
-  /* Setup pH Sensor */
-  Serial.println("Setting up pH Sensor...");
-  pinMode(phPin,INPUT);
+  
 
   /* Setup EC Sensor */
   Serial.println("Setting up EC Sensor...");

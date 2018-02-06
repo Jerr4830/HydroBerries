@@ -9,12 +9,12 @@
  * Microcontroller:
  * 
  * ** Arduino Mega ADK R3
- * ** Arduino Ethernet Shield
+ * ** Arduino Ethernet Shield 2
  * 
  * Sensors
  * 
  * ** Water Temperature Sensor: Waterproof DS18B20
- * ** Water Flow Sensor: Liquid Flow Meter - Plastic 1/2" NPS Threaded
+ * ** Liquid Flow Sensor: Liquid Flow Meter - Plastic 1/2" NPS Threaded
  * ** Water Level Sensor: 
  * ** Dissolved Oxygen Sensor:
  * ** pH Sensor:
@@ -33,115 +33,166 @@
  */
 
 // libraries
-#include <SPI.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <Ethernet.h>
-#include <SD.h>
-#include <Wire.h>                       // Enable I2C
+#include <SPI.h>                        // library for seriable communication
+#include <OneWire.h>                    // library for temperature and ec sensor
+#include <DallasTemperature.h>          // library for temperature sensor
+#include <Ethernet2.h>                  // Ethernet library for ethernet shield 2
+#include <EthernetUdp2.h>               // library for udp messages
+#include <SD.h>                         // read/write from/to sd card
+#include <Wire.h>                       // Enable I2C (PH and DO2 sensors)
 
 
 #define DO2_address 97                  // default I2C ID number for EZO D.O. Circuit
 #define pH_address 99
 /* Digital Pin declaration */
 #define ONE_WIRE_BUS_TEMP_SENSOR 6      // digital pin for temperature sensor
-#define FLOW_SENSOR_PIN 2               // digital pin for flow sensor
+#define LIQUIDFLOWPIN 2               // digital pin for flow sensor
 #define ECHO_PIN 8                      // digital pin for water level: echo
 #define TRIGGER_PIN 10                  // digital pin for water level: trigger
+
+#define MAX_TIME  60
 
 // Module identifier
 String MODULE_NUMBER = "A";
 
+int numModules = 1;
+
 // MAC address for the controller
 byte mac[] = {
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
+  0x90, 0xA2, 0xDA, 0x11, 0x19, 0x19
 };
 
 // static ip address
-byte ip[] = {129,21,63,177};
+IPAddress ip(129,21,63,177);
 
-// number of hours
-int numHours = 0;
+File moduleConfig;
 
-/*
- * Variables for water temperature sensor
- */
-// Setup a OneWire instance for the temperature sensor
-OneWire TempSensor(ONE_WIRE_BUS_TEMP_SENSOR);
+// number of minutes since the controller started
+float numMinutes = 0;
 
-// Pass OneWire reference to Dallas Temperature
-DallasTemperature temperature_sensor(&TempSensor);
 
-float WaterTempSensor = 0.0;                // variable to hold sensor data
-double MaxWaterTemp = 88;                   // maximum water temperature for the system
-double MinWaterTemp = 77;                   // minimum water temperature for the system
 
-/*
- * Variable for water flow sensor
- */
-volatile uint16_t flow_pulses = 0;          // number of pulses
-volatile uint16_t flow_LastState;           // track the state of the flow pin
-volatile uint32_t flowratetimer = 0;        // time between pulses
-volatile float WaterFlowSensor = 0.0;       // variable to hold sensor data
-double MaxWaterFlow = 30;                   // maximum water flow in the system
-double MinWaterFlow = 1;                    // minimum water flow in the system
+/* Variables for water temperature sensor */
+OneWire TempSensor(ONE_WIRE_BUS_TEMP_SENSOR);       // Setup a OneWire instance for the temperature sensor
 
-/*
- * Variables for water level sensor
- */
-int WaterLevelPin = A10;                    // analog pin for water level sensor
-double WaterLevelSensor = 0.0;              // variable to hold sensor data
-double MaxWaterLevel;                       // maximum water level in the system
-double MinWaterLevel;                       // minimum water level in the system
+DallasTemperature temperature_sensor(&TempSensor);  // Pass OneWire reference to Dallas Temperature
 
-/*
- * Variables for the Dissolved Oxygen sensor
- */
-float DO2Sensor = 0.0;                      // variable to hold the sensor data
-double MaxDO2;                              // maximum dissolved oxygen in the system
-double MinDO2;                              // minimum dissolved oxygen in the system
+float LiquidTempSensor = 0.0;                       // variable to hold sensor data
+double MaxLiquidTemp = 88;                          // maximum solution temperature for the system
+double MinLiquidTemp = 77;                          // minimum solution temperature for the system
+String tempStatus = "within limits" ;                // current status of the temperature
 
-/*
- * Variables for pH sensor
- */
-float phSensor = 0.0;                       // variable to hold the sensor data
-double MaxpH;                               // maximum pH in the system
-double MinpH;                               // minimum pH in the system
+/* Variable for water flow sensor */
+volatile uint16_t flow_pulses = 0;                  // number of pulses
+volatile uint16_t flowPrevState;                    // track the state of the flow pin
+volatile uint32_t flowratetimer = 0;                // time between pulses
+volatile float LiquidFlowSensor = 0.0;              // variable to hold sensor data
+double MaxLiquidFlow = 30;                          // maximum water flow in the system
+double MinLiquidFlow = 1;                           // minimum water flow in the system
+String flowStatus = "within limits";                // current status of the flow
 
-/*
- * Variables for homemade EC sensor
- */
-float CalibrationEC = 2.9;                  // EC value of calibration solution in s/cm
-float TempCoef = 0.019;                     //0.019 is considered the standard for plan nutrients
-float KValue = 0;
-int ECSensorPin = A0;                       // analog pin for ec sensor
-int ECSensorPWR = A4;                       // analog pin to power the ec sensor
-int RA = 1000;                              // pull-up resistor for the ec sensor
-int RB = 25;                                // Resistance of powering pins
+/* Variables for water level sensor */
+int LiquidLevelPin = A10;                           // analog pin for water level sensor
+double LiquidLevelSensor = 0.0;                     // variable to hold sensor data
+double MaxLiquidLevel;                              // maximum water level in the system
+double MinLiquidLevel;                              // minimum water level in the system
+String levelStatus = "within limits";               // current status of the level
+
+/* Variables for the Dissolved Oxygen sensor */
+float DO2Sensor = 0.0;                              // variable to hold the sensor data
+double MaxDO2;                                      // maximum dissolved oxygen in the system
+double MinDO2;                                      // minimum dissolved oxygen in the system
+String do2Status = "within limits";                 // current status of D.O.
+
+/* Variables for pH sensor */
+float phSensor = 0.0;                               // variable to hold the sensor data
+double MaxpH;                                       // maximum pH in the system
+double MinpH;                                       // minimum pH in the system
+String phStatus = "within limits";                  // current status of the pH
+
+/* Variables for homemade EC sensor */
+float CalibrationEC = 2.9;                          // EC value of calibration solution in s/cm
+float TempCoef = 0.019;                             // 0.019 is considered the standard for plan nutrients
+float KValue = 0;                                   // calibration variable
+int ECSensorPin = A0;                               // analog pin for ec sensor
+int ECSensorPWR = A4;                               // analog pin to power the ec sensor
+int RA = 1000;                                      // pull-up resistor for the ec sensor
+int RB = 25;                                        // Resistance of powering pins
 float EC = 0;
 float EC25 = 0;
-float ECSensor = 0.0;                       // variable to hold sensor data
+float ECSensor = 0.0;                               // variable to hold sensor data
 float raw = 0;
-float ECVin = 5;
-float ECVdrop = 0;
-float RC = 0;
-float ECbuf = 0;
-float PPMconversion = 0.5;                  // converting to ppm (US)
+float ECVin = 5;                                    // input voltage
+float ECVdrop = 0;                                  // voltage drop
+float RC = 0;                                       // resistance of solution
+float ECbuf = 0;                                    // buffer to hold ec values
+float PPMconversion = 0.5;                          // converting to ppm (US)
+String ecStatus = "within limits";                  // current status of ec sensor
+
+/* variables for ethernet connections */
+EthernetUDP ServerUdp;                              // server variable for udp communication
+unsigned int localPort = 8080;                      // local port for UDP
+EthernetServer server(80);                          // server variable for website
+char udpBuffer[UDP_TX_PACKET_MAX_SIZE];          // buffer to hold incoming packet
+
+/* variable for sensor testing */
+bool testing = true;                                // Enable/Disable ethernet connection
+bool mult_client = false;                           // Enable/Disable udp communication
+int measNum = 0;
 
 
+/*
+ * Interrupt service routine
+ * calculate the flow rate of the system
+ */
+SIGNAL(TIMER0_COMPA_vect){
+  uint8_t currState = digitalRead(LIQUIDFLOWPIN);
 
+  numMinutes += 0.001;
+  if (currState == flowPrevState){
+    flowratetimer++;
+    return;                                             // nothing changed
+  } /* if () */
+
+  if (currState == HIGH){                               // low to high transition
+    flow_pulses++;
+  }/* if () */
+
+  flowPrevState = currState;
+  LiquidFlowSensor = 1000.0;
+  LiquidFlowSensor /= flowratetimer;                    // in Hz
+  flowratetimer = 0;
+} /* SIGNAL() */
+
+/*
+ * Interrupt function for flow rate sensor
+ * Interrupts the board every 1 ms
+ */
+void useInterrupt(boolean val){
+  if (val){   // if true
+    // Timer 0 is already used for millis() - interrupt somewhere else
+    // and call the function above
+    OCR0A = 0XAF;
+    TIMSK0  |= _BV(OCIE0A);    
+  } else {
+    TIMSK0 &= ~_BV(OCIE0A);
+  } /* if() */
+}/* useInterrupt() */
 
 
 /*
  * Initialize the sensors for the monitoring system
  */
 void InitSensors(){
-  /* Setup Water temperature sensor */
+  /* Setup Liquid temperature sensor */
   temperature_sensor.begin();             // initialize temperature sensor
   delay(100);                             // wait for 100 ms
 
-  /* Setup water level sensor */
-  pinMode(WaterLevelPin, INPUT);          // set analog pin as input
+  /* Setup Liquid level sensor */
+  pinMode(LiquidLevelPin, INPUT);          // set analog pin as input
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(TRIGGER_PIN, OUTPUT);
+  digitalWrite(ECHO_PIN,HIGH);  
   delay(100);                             // wait for 100 ms
 
   /* Setup EC Sensor */
@@ -149,7 +200,13 @@ void InitSensors(){
   pinMode(ECSensorPWR, OUTPUT);
   RA = RA + RB;
   delay(1000);
-
+  
+  /* Setup Liquid flow sensor */
+  pinMode(LIQUIDFLOWPIN, INPUT);                  // set flow pin as input
+  digitalWrite(LIQUIDFLOWPIN, HIGH);              // set the flow pin high
+  flowPrevState = digitalRead(LIQUIDFLOWPIN);     
+  //useInterrupt(true);                             // initialize interrupt function
+  delay(100);
   
   
 }/* InitSensors() */
@@ -158,11 +215,12 @@ void InitSensors(){
 /*
  * Calibrate the electrical conductivity sensor
  */
-void setKValue(){
+boolean setKValue(){
   int lcv = 1;            // loop counter variable
   float StartTemp = 0;    // Starting temperature of the solution
   float FinishTemp = 0;   // Ending temperature of the solution
   ECbuf = 0;
+  bool calibrated = false;
   
 
   temperature_sensor.requestTemperatures();             // get the current temperature of the solution
@@ -176,7 +234,7 @@ void setKValue(){
     ECbuf = ECbuf + raw;
     lcv++;                            // increade loop counter variable
     delay(5000);                      // wait for 5 seconds
-  }
+  }/*while()*/
   raw = (ECbuf/10);
 
   temperature_sensor.requestTemperatures();             // get the current temperature of the solution
@@ -190,12 +248,12 @@ void setKValue(){
   KValue = 1000 / (RC*EC);
 
   if (StartTemp == FinishTemp){
-    
+    calibrated = true;
   } else {
-    
-  }
-  
-}
+    calibrated = false;
+  }/*if()*/
+  return calibrated;
+}/* setKValue() */
 
 /*
  * Setup the monitoring system:
@@ -208,37 +266,47 @@ void setKValue(){
  */
 void setup() {
   Serial.begin(9600);           // enable serial port
+  Serial.println("intialized");
+   
+  InitSensors();                // initializes sensors
 
   Wire.begin();                 // enable I2C port
-
-  InitSensors();                // initializes sensors
   
+  while (!setKValue());         // calibrate the EC sensor
 
+  if (!testing){
+    Ethernet.begin(mac);                // Enable ethernet connection
+    server.begin();                     // Start the server
+  }
+  if (mult_client){
+    ServerUdp.begin(localPort);         // Enable UDP communication
+  } 
+  
 }
 
 /*
- * Read the temperature of the water several times and return the average
+ * Read the temperature of the Liquid several times and return the average
  */
-void getWaterTemperature(){
-  WaterTempSensor = 0.0;                        // Initialize temperature sensor to zero.
+void getLiquidTemperature(){
+  LiquidTempSensor = 0.0;                        // Initialize temperature sensor to zero.
   // read the temperature 10 times
   for (int lcv = 0; lcv < 10; lcv++){
     temperature_sensor.requestTemperatures();
-    WaterTempSensor += DallasTemperature::toFahrenheit(temperature_sensor.getTempCByIndex(0));
+    LiquidTempSensor += DallasTemperature::toFahrenheit(temperature_sensor.getTempCByIndex(0));
     delay(1000);
   }/* for() */
 
-  WaterTempSensor = WaterTempSensor / 10;       // take average of the values
+  LiquidTempSensor = LiquidTempSensor / 10;       // take average of the values
 
   delay(100);         // wait for 100 ms
-} /* gerWaterTemperature() */
+} /* gerLiquidTemperature() */
 
 /*
- * Read the water level of the tank
+ * Read the Liquid level of the tank
  */
-void getWaterLevel(){
-  WaterLevelSensor = 0.0;                       // Initialize water level to zero
-  float Level = 0.0;                            // variable to hold water level value
+void getLiquidLevel(){
+  LiquidLevelSensor = 0.0;                       // Initialize Liquid level to zero
+  float Level = 0.0;                            // variable to hold Liquid level value
 
   for (int lcv = 0; lcv < 10; lcv++){
     //Set the trigger pin to low for 2 uS
@@ -253,23 +321,56 @@ void getWaterLevel(){
     digitalWrite(TRIGGER_PIN, LOW);
 
     Level = pulseIn(ECHO_PIN, HIGH, 26000);
-    WaterLevelSensor += (Level/58);
+    LiquidLevelSensor += (Level/58);
   }
 
-  WaterLevelSensor /= 10;                     // take average
-}/* getWaterLevel() */
+  LiquidLevelSensor /= 10;                     // take average
+}/* getLiquidLevel() */
 
 /*
  * read electrical conductivity of solution in the tank
  */
 void getEC(){
   ECSensor = 0.0;
+  float ECtemp = 0;
   float temp = 0;
   for (int lcv=0; lcv<10; lcv++){
     temperature_sensor.requestTemperatures();   // current temperature
-    //temp = 
-  }
-}
+    temp = temperature_sensor.getTempCByIndex(0);
+    digitalWrite(ECSensorPWR,HIGH);
+    raw = analogRead(ECSensorPin);    // first reading will be low
+    raw = analogRead(ECSensorPin);
+    digitalWrite(ECSensorPWR, LOW);
+    
+    // Convert to EC
+    ECVdrop = (ECVin*raw)/1024.0;
+    RC = (ECVdrop*RA)/ (ECVin-ECVdrop);
+    RC = RC - RB;
+    EC = 1000/(RC*KValue);
+
+    // Compensating for temperature
+    EC25 = EC/(1+TempCoef*(temp - 25.0));
+    ECtemp += EC25 * PPMconversion * 1000;
+
+    delay(1000);                                    // wait for 1 second
+  }/* for() */
+  ECSensor = ECtemp / 10;
+  delay(100);                                       // wait for 100 ms
+}/* getEC() */
+
+/*
+ * 
+ */
+void getLiquidFlow(){
+  LiquidFlowSensor = 0.0;                               // reset sensor value to zero
+  // read the sensor value at 10 different time
+  for (int lcv=0; lcv<10; lcv++){
+    LiquidFlowSensor += (flow_pulses / (7.5*60));
+    delay(1000);
+  }/* for() */
+  LiquidFlowSensor /= 10;                               // take the average
+  delay(100);                                           // wait for 100 ms
+}/* getLiquidFlow() */
 
 /*
  * Read the amount of dissolved oxygen in the solution
@@ -354,7 +455,7 @@ float parse_string(char *data){
     result =  atof(DO);                 // convert to float
   }
   return result;                        // return the value
-}
+}/* parse_string() */
 
 /*
  * Read the pH of the solution
@@ -414,6 +515,596 @@ void getPH(){
  * Main function of the monitoring system
  */
 void loop() {
-  // put your main code here, to run repeatedly:
+  EthernetClient client = server.available();                    // listen for incoming clients
+  int timing = 0;
+  File file;
+  numModules = getNumOfModules(file);
+  char module_data[numModules][6];                               // array to hold values from other modules
+  String strData;
+  
+  getLiquidTemperature();                                        // get temperature of the solution
+  getLiquidLevel();                                              // get level of solution in the tank
+  getLiquidFlow();
+  getDissolvedOxygen();                                          // level of D.O. in the solution
+  getPH();
+  getEC();
 
-}
+  // get data from other modules
+  for (int lcv=0; lcv < numModules; lcv++){
+    strData = getModuleData();
+  }/* for() */
+  
+  if (numMinutes >= MAX_TIME){                                   // get data every 30 mins    
+    
+    if (testing){                                                // write data to sd card
+      measNum++;
+      
+      if(logData(measNum)){
+        Serial.println("Successful operation");                  // logging operation succesful
+      } else {
+        Serial.println("Data not written to sd card");           // logging operation not successful
+      }
+      
+    } else {                                                     // display data on website
+      moduleConfig = SD.open("module_settings.txt");
+      
+      // try connection to server
+      // timeout after 30 seconds
+      while (!client){
+        delay(1);
+        timing++;
+        if (timing > 30000){
+          break;
+        }/*if()*/
+        client = server.available();
+      }/*while()*/
+
+      if (client){
+        bool blankLine = true;
+        while(client.connected()){
+          Serial.println("Connection Successful");
+          if (client.available()){
+            char clientResponse = client.read();
+            Serial.println(clientResponse);
+
+            //HTTP request has ended
+            if (clientResponse == '\n' && blankLine){
+              // send a standar http response header
+              client.println("HTTP/1.1 200 OK");
+              client.println("Content-Type: text/html");
+              client.println("Refresh: keep-alive");              // keep the system connected to the website
+              client.println();
+
+              /* display sensor data on the website */
+              client.println("<!DOCTYPE html>");
+              client.println("<html lang='en'>");
+
+              /* head */
+              client.println("<head>");
+              client.println("<title>Hydroponic Monitoring System</title>");
+              client.println("<meta charset='utf-8'>");
+              client.println("<meta name='viewport' content='width=device-width, initial-scale=1'>");
+            
+              /* CSS */
+              client.println("<style>");
+              client.println("* { box-sizing: border-box;}");
+              client.println("body { margin: 0;}");
+              client.println(".header{ background-color: black; padding: 20px; text-align: center; color: white;}");
+              client.print(" a { border: 1px solid lightseagreen; padding: 5px; color: lightseagreen: text-decoration;");
+              client.print(" text-align: center; border-radius: 3px;}");
+              /* create 2 equal columns that floats next to each other */
+              client.println(".colum{ float: left; width: 50%; padding: 15px;}");
+              /* clear floats after the columns */
+              client.println(".row::after{ content:''; display:table; clear:both;}");
+              /* Responsive layout - makes the column stack on top of each other instead of next to each other */
+              client.println("@media (max-width:600px){ .column{ float: left; width: 100%; } }");
+              client.println("</style>");
+
+              client.println("</head>");
+
+              /* body */
+              client.println("<body>");
+              client.println("<div class='header'>");
+              client.println("<h1>Durgin Family Farms - Hydroponic Monitoring System</h1>");
+              client.println("</div>");
+              client.println("<div class='data'>");
+
+              /* sensor data from module A */
+              client.println("div class='modules'>");
+              client.println("<label>");
+              client.println("Module ");
+              client.println(MODULE_NUMBER);
+              client.println("</label>");
+              
+              // header row
+              client.println("<table>");
+              client.println("<tr>");
+              client.println("<td><b>Sensor</b></td>");
+              client.println("<td><b>Value</b></td>");
+              client.println("<td><b>Units</b></td>");
+              client.println("<td><b>Status</b></td>");
+              client.println("</tr>");
+
+              /* sensor values */
+              /* Module A */
+
+              // temperature
+              client.println("<tr>");              
+              client.println("<td><b>Temperature</b></td>");
+              client.print("<td>");
+              client.print(LiquidTempSensor);
+              client.print("</td>");
+              
+              client.println("<td>");
+              client.println("&#8457");
+              client.println("</td>");
+              
+              client.println("<td>");
+              client.println(tempStatus);
+              client.println("</td>");
+              client.println("</tr>");
+
+              // Dissolved Oxygen
+              client.println("<tr>");              
+              client.println("<td><b>Dissolved Oxygen</b></td>");
+              client.print("<td>");
+              client.print(DO2Sensor);
+              client.print("</td>");
+              
+              client.println("<td>");
+              client.println("mg/L");
+              client.println("</td>");
+              
+              client.println("<td>");
+              client.println(do2Status);
+              client.println("</td>");
+              client.println("</tr>");
+
+              // pH
+              client.println("<tr>");              
+              client.println("<td><b>pH</b></td>");
+              client.print("<td>");
+              client.print(phSensor);
+              client.print("</td>");
+              
+              client.println("<td>");
+              client.println("ppm");
+              client.println("</td>");
+              
+              client.println("<td>");
+              client.println(phStatus);
+              client.println("</td>");
+              client.println("</tr>");
+
+              // Level
+              client.println("<tr>");              
+              client.println("<td><b>Level</b></td>");
+              client.print("<td>");
+              client.print(LiquidLevelSensor);
+              client.print("</td>");
+              
+              client.println("<td>");
+              client.println("cm");
+              client.println("</td>");
+              
+              client.println("<td>");
+              client.println(levelStatus);
+              client.println("</td>");
+              client.println("</tr>");
+
+              // EC
+              client.println("<tr>");              
+              client.println("<td><b>Electrical Conductivity</b></td>");
+              client.print("<td>");
+              client.print(ECSensor);
+              client.print("</td>");
+              
+              client.println("<td>");
+              client.println("ppm");
+              client.println("</td>");
+              
+              client.println("<td>");
+              client.println(ecStatus);
+              client.println("</td>");
+              client.println("</tr>");
+
+              // flow
+              client.println("<tr>");              
+              client.println("<td><b>Flow</b></td>");
+              client.print("<td>");
+              client.print(LiquidFlowSensor);
+              client.print("</td>");
+              
+              client.println("<td>");
+              client.println("liters/sec");
+              client.println("</td>");
+              
+              client.println("<td>");
+              client.println(flowStatus);
+              client.println("</td>");
+              client.println("</tr>");
+
+              client.println("</table>");
+              client.println("</div>");
+
+              /* get data from the other modules */
+              for (int lcv=0; lcv<numModules; lcv++){                     // for each module
+                client.println("<div class='modules'>");
+                client.println("<table>");
+                for(int ilcv=0; ilcv<6;ilcv++){                           // for each sensor
+                  client.println("<tr>");
+                  for(int i=0; i<4; i++){                                 // for each row
+                    client.println("<td>");
+//                    client.println(module_data[lcv][ilcv][i]);
+                    client.println("</td>");
+                  }/* for() */
+                  client.println("</tr>");
+                }/* for() */
+                client.println("</table>");
+                client.println("</div>");
+              }/* for() */
+              
+            }/* if() */
+          }/*if()*/
+        }/*while()*/
+      }/*if()*/
+      
+    }/* if() */
+    numMinutes = 0;
+  }/* if() */
+  delay(1000);
+}/*loop()*/
+
+///*
+// * Sends a detailed email to the user if an error occurs
+// * Returns:
+// *          0 - if the email was sent successful
+// *          1 - if sending the email was failed
+// */
+//int alertUser(){
+//  int result;
+//
+//  if (sendEmail()){
+//    result = 0;
+//  } else {
+//    result = 1;
+//  }/* if()*/
+//
+//  return result;
+//} /* alertUser()*/
+//
+//
+///*
+// * Send an email using a SMTP server
+// */
+// byte sendEmail(){
+//  byte thisByte = 0;
+//  byte respCode;
+//
+//  // Connect to email server
+//  if (emailClient.connect(emailServer, emailPort) == 1){
+//    Serial.println(F("connected"));
+//  } else {
+//    Serial.println(F("connection failed"));
+//    return 0;
+//  }/*if()*/
+//
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//
+//  // Auth login
+//  Serial.println(F("Sending auth login"));
+//  emailClient.println("auth login");
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//  
+//  // username
+//  Serial.println(F("Sending user"));
+//  // change to base64 encoded user
+//  emailClient.println("amFzcGVlZHg3ODVAZ21haWwuY29t");
+//  
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//
+//  //password
+//  Serial.println(F("Sending password"));
+//  // base64 encode user
+//  emailClient.println("QXJkdWlub0VtYWlsVGVzdGluZw==");
+//
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//
+//  // Sender's email
+//  Serial.println("Sending From");
+//  emailClient.println("MAIL From: <jasspeedx785@gmail.com>");
+//
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//
+//  // recipient address
+//  Serial.println("Sending To");
+//  emailClient.println("RCPT To: <jra8788@rit.edu>");
+//
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//
+//  // DATA
+//  Serial.println("Data");
+//  emailClient.println("DATA");
+//
+//  // Sending the email
+//  Serial.println(F("Sending email"));
+//  
+//  // recipuent's address
+//  emailClient.println("To: <jra8788@rit.edu>");
+//  
+//  // Sender's address
+//  emailClient.println("From: <jaspeedx785@gmail.com>");
+//
+//  // mail subject
+//  emailClient.println("Subject: Arduino Email Test");
+//
+//  // email body
+//  emailClient.println("Sent from Arduino board");
+//
+//  
+//  emailClient.println(".");
+//
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//
+//  Serial.println(F("Sending QUIT"));
+//  
+//  emailClient.println("QUIT");
+//  
+//  if (!emailRcv()){
+//    return 0;
+//  }/*if()*/
+//  // disconnect from server
+//  emailClient.stop();
+//
+//  Serial.println(F("disconnected"));
+//
+//  return 1;
+//}/* sendEmail()*/
+//
+///*
+// * Verify that data was sent to email server 
+// */
+//byte emailRcv(){
+//  byte responseCode;
+//  byte thisByte;
+//  int loopCount = 0;
+//
+//  // if no internet connection
+//  while (!emailClient.available()){
+//    delay(1);
+//    loopCount++;
+//
+//    // if nothing received for 30 seconds, timeout
+//    if(loopCount > 30000){
+//      emailClient.stop();
+//      Serial.println(F("\r\nTimeout"));
+//      return 0;
+//    }/*if()*/
+//  }/*while()*/
+//
+//  responseCode = emailClient.peek();
+//
+//  while(emailClient.available()){
+//    thisByte = emailClient.read();
+//    Serial.write(thisByte);
+//  }/*while()*/
+//
+//  if (responseCode >='4'){
+//    emailFail();
+//    return 0;
+//  }/*if()*/
+//  return 1;
+//}/*emailRcv()*/
+//
+///*
+// * Failed to send email 
+// */
+//void emailFail(){
+//  byte thisByte = 0;
+//  int loopCount = 0;
+//
+//  // stop sending the email
+//  emailClient.println(F("QUIT"));
+//
+//  while(!emailClient.available()){
+//    delay(1);
+//    loopCount++;
+//
+//    // if nothing is received  for 30 seconds, timeout
+//    if (loopCount > 30000){
+//      emailClient.stop();
+//      Serial.println(F("\r\n Timeout"));
+//      return;
+//    }/*if()*/
+//  }/*while()*/
+//
+//  while(emailClient.available()){
+//    thisByte = emailClient.read();
+//    Serial.write(thisByte);
+//  }/*while()*/
+//
+//  //disconnect from the server
+//  emailClient.stop();
+//
+//  Serial.println(F("disconnected"));
+//}/*emailFail()*/
+
+
+/*
+ * 
+ */
+
+/*
+ * Display recorded sensor data on a website.
+ * Display the data for each monitoring system
+ */
+void displayData(EthernetClient client, int numModules){
+
+  /* display sensor data on website */
+  client.println("<!DOCTYPE html>");
+  client.println("<html lang='en'>");
+
+  /* head */
+  client.println("<head>");
+  client.println("<title>Hydroponics Monitoring System</title>");
+  client.println("<meta charset='utf-8'>");
+  client.println("<meta name='viewport' content='width=device-width, initial-scale=1'>");
+
+  /* CSS */
+  client.println("<style>");
+  client.println("body { margin: 0;}");
+  client.println(".header{ padding: 20px; text-align: center; }");
+  client.println(".column{float: left; width: 50%; padding: 15px;}");
+  client.println(".row::after{content:''; display:table; clear:both;}");
+  client.println("@media(max-width:600px){.column{float:left;width:100%;}}");
+  client.println("</style>");
+
+  client.println("</head>");
+  /*body*/
+  client.println("<body>");
+  // header
+  client.println("<div class='header'>");
+  client.println("<h1> Durgin Family Farms - Hydroponic Strawberries Monitoring System </h1>");
+  client.println("</div>");
+  // Modules
+  for (int lcv=1; lcv < numModules; lcv++){
+    client.println("<div>");
+    client.print("Module Number: ");
+    
+  }
+  //client.println("div cla
+}/*displayData()*/
+
+/*
+ * Read the sensor values from the other modules
+ * After receiving the data, send a reply to client
+ * module
+ */
+String getModuleData(){
+  char replyBuffer[] = "received";
+
+  
+
+  
+}/*getModuleData()*/
+
+
+/*
+ * Add/modify client information
+ */
+void addClient(EthernetClient client){
+  /* display sensor data on website */
+  client.println("<!DOCTYPE html>");
+  client.println("<html lang='en'>");
+
+  /* head */
+  client.println("<head>");
+  client.println("<title>&#9881; Settings</title>");
+  client.println("<meta charset='utf-8'>");
+  client.println("<meta name='viewport' content='width=device-width, initial-scale=1'>");
+  client.println("</head>");
+  client.println("<table>");
+  client.println("<tr>");
+  client.println("<td>Module Number</td>");
+  client.println("<td>Module IP</td>");
+  client.println("<td>Module PORT</td>");
+  
+  
+  
+}/* changeSettings() */
+
+
+/*
+ * Write the sensor data to a text file
+ * Returns
+ *        0 - if the data was succesfully written to the file
+ *        1 - if the file was not found
+ */
+int logData(int measNum){
+  int errorCode = 0;
+  File dataFile = SD.open("logdata.txt",FILE_WRITE);
+
+  // if the file is available write to it
+  if (dataFile) {
+    dataFile.print("Measurement #");
+    dataFile.println(measNum);
+
+    dataFile.print("Module Number: ");
+    dataFile.println(MODULE_NUMBER);
+
+    /* record measured data */
+    // Temperature
+    dataFile.print("-> Liquid Temperature: ");
+    dataFile.print(LiquidTempSensor);
+    dataFile.println("F");
+    
+    // Level
+    dataFile.print("-> Liquid Level: ");
+    dataFile.print(LiquidLevelSensor);
+    dataFile.println(" cm");
+
+    // Flow
+    dataFile.print("-> Liquid Flow: ");
+    dataFile.print(LiquidFlowSensor);
+    dataFile.println(" liters/sec");
+
+    // EC
+    dataFile.print("-> Electrical Conductivity: ");
+    dataFile.print(ECSensor);
+    dataFile.println(" ppm");
+
+    // Dissolved Oxygen
+    dataFile.print("-> Dissolved Oxygen: ");
+    dataFile.print(DO2Sensor);
+    dataFile.println(" g/ml");
+
+    // pH
+    dataFile.print("-> pH: ");
+    dataFile.print(phSensor);
+    dataFile.println();
+    dataFile.println();
+    
+    dataFile.close();                                         // close the file    
+  } else {            // if the file isn't open return error
+    errorCode = 1;
+  }/* if() */
+
+  return errorCode;
+}/* logData() */
+
+/*
+ * Get the number of modules currently present
+ */
+int getNumOfModules(File configFile){
+  char temp[3];
+  char currChar;
+  char prevChar;
+  int lcv = 0;
+  while (configFile.available()){
+    currChar = configFile.read();
+    if (currChar == '#'){
+      currChar = configFile.read();
+      while(currChar != ';'){        
+        temp[lcv] = currChar;
+        lcv++;
+        currChar = configFile.read();
+      }/*while()*/
+    }/* if() */    
+  }/*while()*/
+  return String(temp).toInt();
+}/* getNumOfModules() */
+

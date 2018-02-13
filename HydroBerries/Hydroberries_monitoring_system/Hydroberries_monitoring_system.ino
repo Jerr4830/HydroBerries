@@ -45,12 +45,12 @@
 #define DO2_address 97                  // default I2C ID number for EZO D.O. Circuit
 #define pH_address 99
 /* Digital Pin declaration */
-#define ONE_WIRE_BUS_TEMP_SENSOR 6      // digital pin for temperature sensor
-#define LIQUIDFLOWPIN 2               // digital pin for flow sensor
-#define ECHO_PIN 8                      // digital pin for water level: echo
-#define TRIGGER_PIN 10                  // digital pin for water level: trigger
+#define ONE_WIRE_BUS_TEMP_SENSOR 9      // digital pin for temperature sensor
+#define LIQUIDFLOWPIN 52               // digital pin for flow sensor
+#define ECHO_PIN  12                    // digital pin for water level: echo
+#define TRIGGER_PIN 11                  // digital pin for water level: trigger
 
-#define MAX_TIME  60
+int MAX_TIME = 2;
 
 // Module identifier
 String MODULE_NUMBER = "A";
@@ -65,12 +65,27 @@ byte mac[] = {
 // static ip address
 IPAddress ip(129,21,63,177);
 
+EthernetClient emailClient;                         // ethernet client for email
+
+String emailBuffer;                                 // body content of the email
+
+char emailServer[] = "mail.smtp2go.com";            // SMTP server to send email
+
+int emailPort = 2525;                               // port for the email server
+
 File moduleConfig;
 
-// number of minutes since the controller started
-float numMinutes = 0;
+float numMinutes = 0;                               // number of minutes since the controller started
 
+const int chipSelect = 4;
 
+EthernetUDP ServerUdp;                              // server variable for udp communication
+
+unsigned int localPort = 8080;                      // local port for UDP
+
+EthernetServer server(80);                          // server variable for website
+
+char udpBuffer[UDP_TX_PACKET_MAX_SIZE];             // buffer to hold incoming packet
 
 /* Variables for water temperature sensor */
 OneWire TempSensor(ONE_WIRE_BUS_TEMP_SENSOR);       // Setup a OneWire instance for the temperature sensor
@@ -80,7 +95,9 @@ DallasTemperature temperature_sensor(&TempSensor);  // Pass OneWire reference to
 float LiquidTempSensor = 0.0;                       // variable to hold sensor data
 double MaxLiquidTemp = 88;                          // maximum solution temperature for the system
 double MinLiquidTemp = 77;                          // minimum solution temperature for the system
-String tempStatus = "within limits" ;                // current status of the temperature
+String tempStatus = "within limits" ;               // current status of the temperature
+int tempPWR = 6;
+int tempGND = 3;
 
 /* Variable for water flow sensor */
 volatile uint16_t flow_pulses = 0;                  // number of pulses
@@ -91,13 +108,15 @@ double MaxLiquidFlow = 30;                          // maximum water flow in the
 double MinLiquidFlow = 1;                           // minimum water flow in the system
 String flowStatus = "within limits";                // current status of the flow
 
+
 /* Variables for water level sensor */
-int LiquidLevelPin = A10;                           // analog pin for water level sensor
+
 double LiquidLevelSensor = 0.0;                     // variable to hold sensor data
 double MaxLiquidLevel;                              // maximum water level in the system
 double MinLiquidLevel;                              // minimum water level in the system
 String levelStatus = "within limits";               // current status of the level
-
+int levelPWR = 10;
+int levelGND = 13;
 /* Variables for the Dissolved Oxygen sensor */
 float DO2Sensor = 0.0;                              // variable to hold the sensor data
 double MaxDO2;                                      // maximum dissolved oxygen in the system
@@ -129,11 +148,7 @@ float ECbuf = 0;                                    // buffer to hold ec values
 float PPMconversion = 0.5;                          // converting to ppm (US)
 String ecStatus = "within limits";                  // current status of ec sensor
 
-/* variables for ethernet connections */
-EthernetUDP ServerUdp;                              // server variable for udp communication
-unsigned int localPort = 8080;                      // local port for UDP
-EthernetServer server(80);                          // server variable for website
-char udpBuffer[UDP_TX_PACKET_MAX_SIZE];          // buffer to hold incoming packet
+
 
 /* variable for sensor testing */
 bool testing = true;                                // Enable/Disable ethernet connection
@@ -147,6 +162,7 @@ int measNum = 0;
  */
 SIGNAL(TIMER0_COMPA_vect){
   uint8_t currState = digitalRead(LIQUIDFLOWPIN);
+  float liters;
 
   numMinutes += 0.001;
   if (currState == flowPrevState){
@@ -161,6 +177,8 @@ SIGNAL(TIMER0_COMPA_vect){
   flowPrevState = currState;
   LiquidFlowSensor = 1000.0;
   LiquidFlowSensor /= flowratetimer;                    // in Hz
+  liters = flow_pulses / (7.5*60);
+  LiquidFlowSensor = LiquidFlowSensor* liters;
   flowratetimer = 0;
 } /* SIGNAL() */
 
@@ -185,11 +203,18 @@ void useInterrupt(boolean val){
  */
 void InitSensors(){
   /* Setup Liquid temperature sensor */
+  pinMode(tempPWR,OUTPUT);                // set the pin as output
+  pinMode(tempGND,OUTPUT);                // set the pin as output
+  digitalWrite(tempGND,LOW);              
+  digitalWrite(tempPWR, HIGH);
   temperature_sensor.begin();             // initialize temperature sensor
   delay(100);                             // wait for 100 ms
 
-  /* Setup Liquid level sensor */
-  pinMode(LiquidLevelPin, INPUT);          // set analog pin as input
+  /* Setup Liquid level sensor */ 
+  pinMode(levelGND, OUTPUT);
+  digitalWrite(levelGND, LOW);
+  pinMode(levelPWR, OUTPUT);
+  digitalWrite(levelPWR, HIGH); 
   pinMode(ECHO_PIN, INPUT);
   pinMode(TRIGGER_PIN, OUTPUT);
   digitalWrite(ECHO_PIN,HIGH);  
@@ -205,7 +230,7 @@ void InitSensors(){
   pinMode(LIQUIDFLOWPIN, INPUT);                  // set flow pin as input
   digitalWrite(LIQUIDFLOWPIN, HIGH);              // set the flow pin high
   flowPrevState = digitalRead(LIQUIDFLOWPIN);     
-  //useInterrupt(true);                             // initialize interrupt function
+  useInterrupt(true);                             // initialize interrupt function
   delay(100);
   
   
@@ -224,7 +249,11 @@ boolean setKValue(){
   
 
   temperature_sensor.requestTemperatures();             // get the current temperature of the solution
+  delay(1000);
+  temperature_sensor.requestTemperatures();             // get the current temperature of the solution
   StartTemp = temperature_sensor.getTempCByIndex(0);    // starting temperature
+  Serial.print("Starting Temperature: ");
+  Serial.println(StartTemp);
 
   while (lcv <= 10){
     digitalWrite(ECSensorPWR,HIGH);
@@ -239,6 +268,8 @@ boolean setKValue(){
 
   temperature_sensor.requestTemperatures();             // get the current temperature of the solution
   FinishTemp = temperature_sensor.getTempCByIndex(0);   // final temperature of the solution
+  Serial.print("Final Temperature: ");
+  Serial.println(FinishTemp);
 
   EC = CalibrationEC * (1 + (TempCoef * ( FinishTemp - 25.0)));
 
@@ -247,7 +278,7 @@ boolean setKValue(){
   RC = RC - RB;
   KValue = 1000 / (RC*EC);
 
-  if (StartTemp == FinishTemp){
+  if ((StartTemp > (FinishTemp*0.9)) && (StartTemp < (FinishTemp*1.1))){
     calibrated = true;
   } else {
     calibrated = false;
@@ -266,23 +297,30 @@ boolean setKValue(){
  */
 void setup() {
   Serial.begin(9600);           // enable serial port
-  Serial.println("intialized");
-   
+  Serial.println("intializing SD card");
+
+  if (!SD.begin(chipSelect)){   // See if the card is present and can be intialized
+    Serial.println("Card failed, or not present");
+    return;
+  }/*if()*/
+  File dataFile = SD.open("logdata.txt",FILE_WRITE);
+  dataFile.print("Module Number: ");
+  dataFile.println(MODULE_NUMBER);
+  dataFile.println("Measurement,Temperature(F),Level(cm),Flow(liters/sec),EC(ppm),D.O.(g/liters),pH");
+  dataFile.close();
+  Serial.println("SD card initialized");
   InitSensors();                // initializes sensors
 
   Wire.begin();                 // enable I2C port
-  
-  while (!setKValue());         // calibrate the EC sensor
 
-  if (!testing){
-    Ethernet.begin(mac);                // Enable ethernet connection
-    server.begin();                     // Start the server
-  }
-  if (mult_client){
-    ServerUdp.begin(localPort);         // Enable UDP communication
-  } 
-  
-}
+
+  // Calibrate the EC sensor
+  if (setKValue()== true){
+    Serial.println("EC Calibration successful");                // Calibration successful
+  } else {
+    Serial.println("EC calibration failed");                    // calibration failed
+  }/* if() */  
+}/*setup()*/
 
 /*
  * Read the temperature of the Liquid several times and return the average
@@ -295,10 +333,10 @@ void getLiquidTemperature(){
     LiquidTempSensor += DallasTemperature::toFahrenheit(temperature_sensor.getTempCByIndex(0));
     delay(1000);
   }/* for() */
-
+  
   LiquidTempSensor = LiquidTempSensor / 10;       // take average of the values
 
-  delay(100);         // wait for 100 ms
+  delay(2000);         // wait for 2s
 } /* gerLiquidTemperature() */
 
 /*
@@ -322,7 +360,7 @@ void getLiquidLevel(){
 
     Level = pulseIn(ECHO_PIN, HIGH, 26000);
     LiquidLevelSensor += (Level/58);
-  }
+  }/*for()*/
 
   LiquidLevelSensor /= 10;                     // take average
 }/* getLiquidLevel() */
@@ -362,14 +400,7 @@ void getEC(){
  * 
  */
 void getLiquidFlow(){
-  LiquidFlowSensor = 0.0;                               // reset sensor value to zero
-  // read the sensor value at 10 different time
-  for (int lcv=0; lcv<10; lcv++){
-    LiquidFlowSensor += (flow_pulses / (7.5*60));
-    delay(1000);
-  }/* for() */
-  LiquidFlowSensor /= 10;                               // take the average
-  delay(100);                                           // wait for 100 ms
+  delay(10000);       // wait for 10 seconds
 }/* getLiquidFlow() */
 
 /*
@@ -407,8 +438,7 @@ void getDissolvedOxygen(){
     case 255:                                 // decimal 255
       Serial.println("No data");              // No further data to send
       break;    
-  }
-  delay(600);                                 
+  }/*switch()*/                                
   while (Wire.available()) {                  // are there bytes to receive
     in_char = Wire.read();                    // receive a byte.
     DO_data[lcv] = in_char;                   // append the byte to the array
@@ -453,7 +483,7 @@ float parse_string(char *data){
     DO = strtok(data,",");              // parse the string at each comma
     sat = strtok(NULL, ",");            // parse the string at each comma
     result =  atof(DO);                 // convert to float
-  }
+  }/*if()*/
   return result;                        // return the value
 }/* parse_string() */
 
@@ -492,7 +522,7 @@ void getPH(){
     case 255:                                 // decimal 255
       Serial.println("No data");              // No further data to send
       break;    
-  }
+  }/*switch()*/
   
   while (Wire.available()) {                  // are there bytes to receive
     in_char = Wire.read();                    // receive a byte.
@@ -518,8 +548,6 @@ void loop() {
   EthernetClient client = server.available();                    // listen for incoming clients
   int timing = 0;
   File file;
-  numModules = getNumOfModules(file);
-  char module_data[numModules][6];                               // array to hold values from other modules
   String strData;
   
   getLiquidTemperature();                                        // get temperature of the solution
@@ -529,22 +557,28 @@ void loop() {
   getPH();
   getEC();
 
-  // get data from other modules
-  for (int lcv=0; lcv < numModules; lcv++){
-    strData = getModuleData();
-  }/* for() */
+  Serial.print("Liquid Temperature: ");
+  Serial.println(LiquidTempSensor);
+
+  Serial.print("Liquid Level: ");
+  Serial.println(LiquidLevelSensor);
+
+  Serial.print("EC: ");
+  Serial.println(ECSensor);
+
+  Serial.print("Liquid Flow: ");
+  Serial.println(LiquidFlowSensor);
+
+  Serial.print("DO2: ");
+  Serial.println(DO2Sensor);
+  Serial.print("pH: ");
+  Serial.println(phSensor);  
   
-  if (numMinutes >= MAX_TIME){                                   // get data every 30 mins    
+  if (true){                                   // get data every 30 mins    
     
-    if (testing){                                                // write data to sd card
+    if (testing == true){                                                // write data to sd card
       measNum++;
-      
-      if(logData(measNum)){
-        Serial.println("Successful operation");                  // logging operation succesful
-      } else {
-        Serial.println("Data not written to sd card");           // logging operation not successful
-      }
-      
+      logData(measNum);            
     } else {                                                     // display data on website
       moduleConfig = SD.open("module_settings.txt");
       
@@ -752,242 +786,201 @@ void loop() {
     }/* if() */
     numMinutes = 0;
   }/* if() */
-  delay(1000);
+  for (int i=0; i < 1800; i++){
+    delay(1000);
+  }
+//  delay(2000);
 }/*loop()*/
 
-///*
-// * Sends a detailed email to the user if an error occurs
-// * Returns:
-// *          0 - if the email was sent successful
-// *          1 - if sending the email was failed
-// */
-//int alertUser(){
-//  int result;
-//
-//  if (sendEmail()){
-//    result = 0;
-//  } else {
-//    result = 1;
-//  }/* if()*/
-//
-//  return result;
-//} /* alertUser()*/
-//
-//
-///*
-// * Send an email using a SMTP server
-// */
-// byte sendEmail(){
-//  byte thisByte = 0;
-//  byte respCode;
-//
-//  // Connect to email server
-//  if (emailClient.connect(emailServer, emailPort) == 1){
-//    Serial.println(F("connected"));
-//  } else {
-//    Serial.println(F("connection failed"));
-//    return 0;
-//  }/*if()*/
-//
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//
-//  // Auth login
-//  Serial.println(F("Sending auth login"));
-//  emailClient.println("auth login");
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//  
-//  // username
-//  Serial.println(F("Sending user"));
-//  // change to base64 encoded user
-//  emailClient.println("amFzcGVlZHg3ODVAZ21haWwuY29t");
-//  
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//
-//  //password
-//  Serial.println(F("Sending password"));
-//  // base64 encode user
-//  emailClient.println("QXJkdWlub0VtYWlsVGVzdGluZw==");
-//
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//
-//  // Sender's email
-//  Serial.println("Sending From");
-//  emailClient.println("MAIL From: <jasspeedx785@gmail.com>");
-//
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//
-//  // recipient address
-//  Serial.println("Sending To");
-//  emailClient.println("RCPT To: <jra8788@rit.edu>");
-//
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//
-//  // DATA
-//  Serial.println("Data");
-//  emailClient.println("DATA");
-//
-//  // Sending the email
-//  Serial.println(F("Sending email"));
-//  
-//  // recipuent's address
-//  emailClient.println("To: <jra8788@rit.edu>");
-//  
-//  // Sender's address
-//  emailClient.println("From: <jaspeedx785@gmail.com>");
-//
-//  // mail subject
-//  emailClient.println("Subject: Arduino Email Test");
-//
-//  // email body
-//  emailClient.println("Sent from Arduino board");
-//
-//  
-//  emailClient.println(".");
-//
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//
-//  Serial.println(F("Sending QUIT"));
-//  
-//  emailClient.println("QUIT");
-//  
-//  if (!emailRcv()){
-//    return 0;
-//  }/*if()*/
-//  // disconnect from server
-//  emailClient.stop();
-//
-//  Serial.println(F("disconnected"));
-//
-//  return 1;
-//}/* sendEmail()*/
-//
-///*
-// * Verify that data was sent to email server 
-// */
-//byte emailRcv(){
-//  byte responseCode;
-//  byte thisByte;
-//  int loopCount = 0;
-//
-//  // if no internet connection
-//  while (!emailClient.available()){
-//    delay(1);
-//    loopCount++;
-//
-//    // if nothing received for 30 seconds, timeout
-//    if(loopCount > 30000){
-//      emailClient.stop();
-//      Serial.println(F("\r\nTimeout"));
-//      return 0;
-//    }/*if()*/
-//  }/*while()*/
-//
-//  responseCode = emailClient.peek();
-//
-//  while(emailClient.available()){
-//    thisByte = emailClient.read();
-//    Serial.write(thisByte);
-//  }/*while()*/
-//
-//  if (responseCode >='4'){
-//    emailFail();
-//    return 0;
-//  }/*if()*/
-//  return 1;
-//}/*emailRcv()*/
-//
-///*
-// * Failed to send email 
-// */
-//void emailFail(){
-//  byte thisByte = 0;
-//  int loopCount = 0;
-//
-//  // stop sending the email
-//  emailClient.println(F("QUIT"));
-//
-//  while(!emailClient.available()){
-//    delay(1);
-//    loopCount++;
-//
-//    // if nothing is received  for 30 seconds, timeout
-//    if (loopCount > 30000){
-//      emailClient.stop();
-//      Serial.println(F("\r\n Timeout"));
-//      return;
-//    }/*if()*/
-//  }/*while()*/
-//
-//  while(emailClient.available()){
-//    thisByte = emailClient.read();
-//    Serial.write(thisByte);
-//  }/*while()*/
-//
-//  //disconnect from the server
-//  emailClient.stop();
-//
-//  Serial.println(F("disconnected"));
-//}/*emailFail()*/
+/*
+ * Sends a detailed email to the user if an error occurs
+ * Returns:
+ *          0 - if the email was sent successful
+ *          1 - if sending the email was failed
+ */
+int alertUser(){
+  int result;
+
+  if (sendEmail()){
+    result = 0;
+  } else {
+    result = 1;
+  }/* if()*/
+
+  return result;
+} /* alertUser()*/
 
 
 /*
- * 
+ * Send an email using a SMTP server
  */
+ byte sendEmail(){
+  byte thisByte = 0;
+  byte respCode;
+
+  // Connect to email server
+  if (emailClient.connect(emailServer, emailPort) == 1){
+    Serial.println(("connected"));
+  } else {
+    Serial.println(("connection failed"));
+    return 0;
+  }/*if()*/
+
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+
+  // Auth login
+  Serial.println(F("Sending auth login"));
+  emailClient.println("auth login");
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+  
+  // username
+  Serial.println(F("Sending user"));
+  // change to base64 encoded user
+  emailClient.println("amFzcGVlZHg3ODVAZ21haWwuY29t");
+  
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+
+  //password
+  Serial.println(F("Sending password"));
+  // base64 encode user
+  emailClient.println("QXJkdWlub0VtYWlsVGVzdGluZw==");
+
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+
+  // Sender's email
+  Serial.println("Sending From");
+  emailClient.println("MAIL From: <jasspeedx785@gmail.com>");
+
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+
+  // recipient address
+  Serial.println("Sending To");
+  emailClient.println("RCPT To: <jra8788@rit.edu>");
+
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+
+  // DATA
+  Serial.println("Data");
+  emailClient.println("DATA");
+
+  // Sending the email
+  Serial.println(("Sending email"));
+  
+  // recipuent's address
+  emailClient.println("To: <jra8788@rit.edu>");
+  
+  // Sender's address
+  emailClient.println("From: <jaspeedx785@gmail.com>");
+
+  // mail subject
+  emailClient.println("Subject: Arduino Email Test");
+
+  // email body
+  emailClient.println("Sent from Arduino board");
+
+  
+  emailClient.println(".");
+
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+
+  Serial.println(("Sending QUIT"));
+  
+  emailClient.println("QUIT");
+  
+  if (!emailRcv()){
+    return 0;
+  }/*if()*/
+  // disconnect from server
+  emailClient.stop();
+
+  Serial.println(("disconnected"));
+
+  return 1;
+}/* sendEmail()*/
 
 /*
- * Display recorded sensor data on a website.
- * Display the data for each monitoring system
+ * Verify that data was sent to email server 
  */
-void displayData(EthernetClient client, int numModules){
+byte emailRcv(){
+  byte responseCode;
+  byte thisByte;
+  int loopCount = 0;
 
-  /* display sensor data on website */
-  client.println("<!DOCTYPE html>");
-  client.println("<html lang='en'>");
+  // if no internet connection
+  while (!emailClient.available()){
+    delay(1);
+    loopCount++;
 
-  /* head */
-  client.println("<head>");
-  client.println("<title>Hydroponics Monitoring System</title>");
-  client.println("<meta charset='utf-8'>");
-  client.println("<meta name='viewport' content='width=device-width, initial-scale=1'>");
+    // if nothing received for 30 seconds, timeout
+    if(loopCount > 30000){
+      emailClient.stop();
+      Serial.println(("\r\nTimeout"));
+      return 0;
+    }/*if()*/
+  }/*while()*/
 
-  /* CSS */
-  client.println("<style>");
-  client.println("body { margin: 0;}");
-  client.println(".header{ padding: 20px; text-align: center; }");
-  client.println(".column{float: left; width: 50%; padding: 15px;}");
-  client.println(".row::after{content:''; display:table; clear:both;}");
-  client.println("@media(max-width:600px){.column{float:left;width:100%;}}");
-  client.println("</style>");
+  responseCode = emailClient.peek();
 
-  client.println("</head>");
-  /*body*/
-  client.println("<body>");
-  // header
-  client.println("<div class='header'>");
-  client.println("<h1> Durgin Family Farms - Hydroponic Strawberries Monitoring System </h1>");
-  client.println("</div>");
-  // Modules
-  for (int lcv=1; lcv < numModules; lcv++){
-    client.println("<div>");
-    client.print("Module Number: ");
-    
-  }
-  //client.println("div cla
-}/*displayData()*/
+  while(emailClient.available()){
+    thisByte = emailClient.read();
+    Serial.write(thisByte);
+  }/*while()*/
+
+  if (responseCode >='4'){
+    emailFail();
+    return 0;
+  }/*if()*/
+  return 1;
+}/*emailRcv()*/
+
+/*
+ * Failed to send email 
+ */
+void emailFail(){
+  byte thisByte = 0;
+  int loopCount = 0;
+
+  // stop sending the email
+  emailClient.println(("QUIT"));
+
+  while(!emailClient.available()){
+    delay(1);
+    loopCount++;
+
+    // if nothing is received  for 30 seconds, timeout
+    if (loopCount > 30000){
+      emailClient.stop();
+      Serial.println(("\r\n Timeout"));
+      return;
+    }/*if()*/
+  }/*while()*/
+
+  while(emailClient.available()){
+    thisByte = emailClient.read();
+    Serial.write(thisByte);
+  }/*while()*/
+
+  //disconnect from the server
+  emailClient.stop();
+
+  Serial.println(("disconnected"));
+}/*emailFail()*/
+
+
 
 /*
  * Read the sensor values from the other modules
@@ -1037,43 +1030,36 @@ void addClient(EthernetClient client){
 int logData(int measNum){
   int errorCode = 0;
   File dataFile = SD.open("logdata.txt",FILE_WRITE);
+  
 
   // if the file is available write to it
-  if (dataFile) {
-    dataFile.print("Measurement #");
-    dataFile.println(measNum);
-
-    dataFile.print("Module Number: ");
-    dataFile.println(MODULE_NUMBER);
+  if (dataFile) {    
+    dataFile.print(measNum);  
+    dataFile.print(",");
+    
 
     /* record measured data */
     // Temperature
-    dataFile.print("-> Liquid Temperature: ");
     dataFile.print(LiquidTempSensor);
-    dataFile.println("F");
+    dataFile.print(",");
     
-    // Level
-    dataFile.print("-> Liquid Level: ");
+    // Level    
     dataFile.print(LiquidLevelSensor);
-    dataFile.println(" cm");
+    dataFile.print(",");
 
     // Flow
-    dataFile.print("-> Liquid Flow: ");
     dataFile.print(LiquidFlowSensor);
-    dataFile.println(" liters/sec");
+    dataFile.print(",");
 
-    // EC
-    dataFile.print("-> Electrical Conductivity: ");
+    // EC    
     dataFile.print(ECSensor);
-    dataFile.println(" ppm");
+    dataFile.print(",");
 
-    // Dissolved Oxygen
-    dataFile.print("-> Dissolved Oxygen: ");
+    // Dissolved Oxygen    
     dataFile.print(DO2Sensor);
-    dataFile.println(" g/ml");
+    dataFile.print(",");
 
-    // pH
-    dataFile.print("-> pH: ");
+    // pH    
     dataFile.print(phSensor);
     dataFile.println();
     dataFile.println();

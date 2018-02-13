@@ -343,14 +343,14 @@ void setup() {
   }
   
   
-  Serial.println("setting up connection");
-  // start the Ethernet connection and the server
-  Ethernet.begin(mac);
-   
-  Serial.println("Starting server...");
-  server.begin();
-  Serial.print("Web Server is at ");
-  Serial.println(Ethernet.localIP()); 
+//  Serial.println("setting up connection");
+//  // start the Ethernet connection and the server
+//  Ethernet.begin(mac);
+//   
+//  Serial.println("Starting server...");
+//  server.begin();
+//  Serial.print("Web Server is at ");
+//  Serial.println(Ethernet.localIP()); 
 }
 
 /*
@@ -939,7 +939,7 @@ void DisplayData(EthernetClient client){
   client.println("</form>");
   client.println("<input type='submit' value='Send K Value' onclick='SendValue()' />");*/
   client.print("Total number of modules: ");
-  client.println(NumOfModules);
+//  client.println(NumOfModules);
   client.println("</div>");
   // Modules
   client.println("<div class='row'>");

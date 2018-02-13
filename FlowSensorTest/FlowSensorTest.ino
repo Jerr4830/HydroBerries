@@ -79,5 +79,5 @@ void loop()                     // run over and over again
   Serial.print(liters); Serial.println(" Liters");
   
  
-  delay(1000);
+  delay(3000);
 }

@@ -6,7 +6,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define ONE_WIRE_BUS_TEMP 4
+#define ONE_WIRE_BUS_TEMP 6
 
 OneWire oneWireTemp(ONE_WIRE_BUS_TEMP);
 

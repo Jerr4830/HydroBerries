@@ -40,28 +40,28 @@ Final Setup
 
 Arduino Pin Setup
 
-Temperature (must have a 4.7K pull-up resistor)
-  •	Power Pin					A3
-  •	Data Pin					A4
-  •	Ground Pin					A5
+1. Temperature (must have a 4.7K pull-up resistor)
+  a. Power Pin					A3
+  b. Data Pin 					A4
+  c. Ground Pin					A5
 
-Electrical Conductivity Sensor (must have a 1K pull-up resistor)
-  •	Power Pin					A1
-  •	Data Pin					A2
-  •	Ground	Pin					Arduino ground pin
-Dissolved Oxygen Sensor
-  •	BNC connection to Tentacle mini shield
-pH Sensor
-  •	BNC connection to Tentacle mini shield
-Level Sensor
-  •	Power Pin					A12
-  •	ECHO Pin					A14
-  •	TRIGGER Pin					A13
-  •	Ground Pin					A15
-Flow Sensor
-  •	Power Pin					Arduino 5V pin
-  •	Data Pin					A0
-  •	Ground Pin					Arduino Ground Pin
+2. Electrical Conductivity Sensor (must have a 1K pull-up resistor)
+  a. Power Pin					A1
+  b. Data Pin 					A2
+  c. Ground	Pin					Arduino ground pin
+3. Dissolved Oxygen Sensor
+  a. BNC connection to Tentacle mini shield
+4. pH Sensor
+  a. BNC connection to Tentacle mini shield
+5. Level Sensor
+  a. Power Pin					A12
+  b. ECHO Pin			  		A14
+  c. TRIGGER Pin  			A13
+  d. Ground Pin					A15
+6. Flow Sensor
+  a. Power Pin					Arduino 5V pin
+  b. Data Pin 					A0
+  c. Ground Pin					Arduino Ground Pin
 
 References
 1. Temperature Sensor

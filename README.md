@@ -39,49 +39,51 @@ Final Setup
 
 
 Arduino Pin Setup
+
 Temperature (must have a 4.7K pull-up resistor)
-•	Power Pin					A3
-•	Data Pin					A4
-•	Ground Pin					A5
+  •	Power Pin					A3
+  •	Data Pin					A4
+  •	Ground Pin					A5
+
 Electrical Conductivity Sensor (must have a 1K pull-up resistor)
-•	Power Pin					A1
-•	Data Pin					A2
-•	Ground	Pin					Arduino ground pin
+  •	Power Pin					A1
+  •	Data Pin					A2
+  •	Ground	Pin					Arduino ground pin
 Dissolved Oxygen Sensor
-•	BNC connection to Tentacle mini shield
+  •	BNC connection to Tentacle mini shield
 pH Sensor
-•	BNC connection to Tentacle mini shield
+  •	BNC connection to Tentacle mini shield
 Level Sensor
-•	Power Pin					A12
-•	ECHO Pin					A14
-•	TRIGGER Pin					A13
-•	Ground Pin					A15
+  •	Power Pin					A12
+  •	ECHO Pin					A14
+  •	TRIGGER Pin					A13
+  •	Ground Pin					A15
 Flow Sensor
-•	Power Pin					Arduino 5V pin
-•	Data Pin					A0
-•	Ground Pin					Arduino Ground Pin
+  •	Power Pin					Arduino 5V pin
+  •	Data Pin					A0
+  •	Ground Pin					Arduino Ground Pin
 
 References
 Temperature Sensor
-•	Sensor Website: https://www.sparkfun.com/products/11050
-•	Example Code: https://github.com/sparkfun/simple_sketches/tree/master/DS18B20 
+  •	Sensor Website: https://www.sparkfun.com/products/11050
+  •	Example Code: https://github.com/sparkfun/simple_sketches/tree/master/DS18B20 
 Electrical Conductivity 
-•	Example Code: https://hackaday.io/project/7008-fly-wars-a-hackers-solution-to-world-hunger/log/24646-three-dollar-ec-ppm-meter-arduino 
+  •	Example Code: https://hackaday.io/project/7008-fly-wars-a-hackers-solution-to-world-hunger/log/24646-three-dollar-ec-ppm-meter-arduino 
 Dissolved Oxygen Sensor
-•	Sensor Website: https://www.atlas-scientific.com/dissolved-oxygen.html 
-•	Example Code: https://www.atlas-scientific.com/_files/code/do-i2c.pdf 
+  •	Sensor Website: https://www.atlas-scientific.com/dissolved-oxygen.html 
+  •	Example Code: https://www.atlas-scientific.com/_files/code/do-i2c.pdf 
 pH Sensor
-•	Sensor Website: https://www.atlas-scientific.com/ph.html 
-•	Example Code: https://www.atlas-scientific.com/_files/code/ph-i2c.pdf  
+  •	Sensor Website: https://www.atlas-scientific.com/ph.html 
+  •	Example Code: https://www.atlas-scientific.com/_files/code/ph-i2c.pdf  
 Level Sensor
-•	Sensor Website: https://www.robotshop.com/en/weatherproof-ultrasonic-sensor-separate-probe.html?gclid=EAIaIQobChMIzPi-z5Di1wIVFyWBCh0cnwzoEAkYBSABEgLe_fD_BwE 
-•	Example Code : https://github.com/RobotShop/RB-Dfr-720_Weatherproof_Ultrasonic_Sensor_with_Separate_Probe 
+  •	Sensor Website: https://www.robotshop.com/en/weatherproof-ultrasonic-sensor-separate-probe.html?gclid=EAIaIQobChMIzPi-z5Di1wIVFyWBCh0cnwzoEAkYBSABEgLe_fD_BwE 
+  •	Example Code : https://github.com/RobotShop/RB-Dfr-720_Weatherproof_Ultrasonic_Sensor_with_Separate_Probe 
 Flow Sensor
-•	Sensor Website: https://www.adafruit.com/product/828 
-•	Example Code:  https://github.com/adafruit/Adafruit-Flow-Meter 
+  •	Sensor Website: https://www.adafruit.com/product/828 
+  •	Example Code:  https://github.com/adafruit/Adafruit-Flow-Meter 
 Email Example Code
-•	https://playground.arduino.cc/Code/Email 
+  •	https://playground.arduino.cc/Code/Email 
 Ethernet Library Example
-•	Web Server: https://www.arduino.cc/en/Tutorial/WebServer
-•	Web Client: https://www.arduino.cc/en/Tutorial/WebClient 
-•	Use Ethernet2.h instead of Ethernet.h for the ethernet library
+  •	Web Server: https://www.arduino.cc/en/Tutorial/WebServer
+  •	Web Client: https://www.arduino.cc/en/Tutorial/WebClient 
+  •	Use Ethernet2.h instead of Ethernet.h for the ethernet library

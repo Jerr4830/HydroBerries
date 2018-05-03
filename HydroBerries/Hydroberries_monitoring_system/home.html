@@ -1,0 +1,157 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title> Hydroponic Monitoring System</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+body { margin: 0}
+
+.topnav{
+	background-color:black;	
+	position: fixed;
+	overflow: hidden;
+	top: 0;
+	width: 100%;	
+}
+	
+ul {
+	list-style-type: none;
+	margin: 0 auto;
+	padding: 15px;
+	width: 80%;
+	vertical-align: center;
+}
+
+li{
+	display: inline;
+	padding: 10px;
+}
+
+a{
+	color: white;
+	text-decoration: none;
+	text-align: center;
+}
+
+a:hover{ cursor: pointer;}
+table { 
+	width: 800px;
+	padding: 10px;
+}
+th { 
+	border-bottom: 1px solid black;
+	background-color:#4CAF50;
+	color:white;
+	padding:15px;
+}
+td{
+	padding: 10px; 
+	border-bottom:1px solid black;
+}
+
+tr:nth-child(even){
+	background-color:#f2f2f2
+}
+
+tr:hover{
+	cursor:pointer;
+}
+	
+.server_data{
+	overflow-x: auto;
+	margin-top: 50px;
+}
+
+.module_data{ 
+	overflow-x: auto;
+}
+
+
+.active{
+	border-bottom: 1px solid white;
+}
+
+@media screen and (max-width: 800px){
+	.server_data{
+		margin-top: 200px;
+	}
+	li{
+		width:100%;
+		display: block;
+	}
+	a {
+		width: 100%;		
+	}
+	
+}
+</style>
+
+</head>
+<body>
+<div class="topnav">
+<ul class="nav navbar-nav">
+<li class="active"><a href="Home.html">Home</a></li>
+<li><a href="edit_modules.html" style="color:white">Edit Module</a></li>
+<li><a href="add_module.html" style="color:white">Add Module</a></li>
+<li><a href="delete_module.html" style="color:white">Delete Module</a></li>
+</ul>
+</div>
+<div class="server_data"></div>
+<div class="module_data">
+<h2>Module ID: A</h2>
+<table>
+<tr>
+<th><b>Sensor</b></th>
+<th><b>Value</b></th>
+<th><b>Status</b></th>
+<th><b>Upper Limit</b></th>
+<th><b>Lower Limit</b></th>
+</tr>
+<tr>
+<td><b>Temperature</b></td>
+<td>85 F</td>
+<td>within limits</td>
+<td>89 F</td>
+<td>77 F</td>
+</tr>
+<tr>
+<td><b>Electrical Conductivity</b></td>
+<td>1200 ppm</td>
+<td>within limits</td>
+<td>2500 ppm</td>
+<td>1400 ppm</td>
+</tr>
+<tr>
+<td><b>Dissolved Oxygen</b></td>
+<td>6.9 mg/L</td>
+<td>under limits</td>
+<td>8 mg/L</td>
+<td>8.5 mg/L</td>
+</tr>
+<tr>
+<td><b>pH</b></td>
+<td>6</b></td>
+<td>within limits</b></td>
+<td>5.7</b></td>
+<td>7.5</b></td>
+</tr>
+<tr>
+<td><b>Level</b></td>
+<td>5 gal.</b></td>
+<td>under limits</b></td>
+<td>8 gal.</b></td>
+<td>none</b></td>
+</tr>
+<tr>
+<td><b>Flow</b></td>
+<td>2 gal/min</b></td>
+<td>under limits</b></td>
+<td>5 gal/min</td>
+<td>6 gal/min</td>
+</tr>
+</table>
+</div>
+</body>
+</html>

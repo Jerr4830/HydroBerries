@@ -1,7 +1,7 @@
 
 
 // which pin to use for reading the sensor? can use any pin!
-#define FLOWSENSORPIN 2
+#define FLOWSENSORPIN 8
 
 // count how many pulses!
 volatile uint16_t pulses = 0;
@@ -57,8 +57,9 @@ void loop()                     // run over and over again
 { 
   
   //lcd.print(flowrate);
-  Serial.print("Freq: "); Serial.print(flowrate); Serial.println(" Hz");
-  Serial.print("Pulses: "); Serial.println(pulses, DEC);
+//  Serial.print("Freq: "); Serial.print(flowrate); Serial.println(" Hz");
+//  Serial.print("Pulses: "); Serial.println(pulses, DEC);
+
   
   // if a plastic sensor use the following calculation
   // Sensor Frequency (Hz) = 7.5 * Q (Liters/min)
@@ -77,7 +78,11 @@ void loop()                     // run over and over again
   liters /= 60.0;
 */
   Serial.print(liters); Serial.println(" Liters");
-  
- 
+
+  Serial.print("Flowrate: ");
+  Serial.print((flowrate/7.5)*0.26);
+  Serial.println(" gallons/min");
+  flowrate = 0;
+  pulses = 0;
   delay(3000);
 }

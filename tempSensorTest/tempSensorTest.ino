@@ -1,39 +1,72 @@
-/*
- * Water Temperature Sensor test
- * DS18B20
- */
+#include <OneWire.h> 
 
-#include <OneWire.h>
-#include <DallasTemperature.h>
 
-#define ONE_WIRE_BUS_TEMP 6
+int DS18S20_Pin = 4; //DS18S20 Signal pin on digital 2
+char tmpstring[10];
 
-OneWire oneWireTemp(ONE_WIRE_BUS_TEMP);
+//Temperature chip i/o
+OneWire ds(DS18S20_Pin);  // on digital pin 2
 
-DallasTemperature sensors(&oneWireTemp);
-void setup() {
-  // put your setup code here, to run once:
+
+
+void setup(void) {
   Serial.begin(9600);
-  Serial.println("Testing Temp Sensor");
-  sensors.begin();
   
-
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
+void loop(void) {
+  float temperature = getTemp();
+  int tmp = (int) temperature;
+  Serial.println("Temperature");
+  Serial.println(tmp);  
+
+  delay(2000); //just here to slow down the output so it is easier to read
   
-  Serial.println("Getting temperature measurement");
-  sensors.requestTemperatures();
-  Serial.println("Done");
-  Serial.print("Temp: ");
-  float temp = sensors.getTempCByIndex(0);
-  Serial.print(temp);
-  Serial.print(" C");
-  Serial.print("     ");
-  Serial.print(DallasTemperature::toFahrenheit(temp));
-  Serial.println();
-
-  delay(2000);
-
 }
+
+
+float getTemp(){
+  //returns the temperature from one DS18S20 in DEG Celsius
+
+  byte data[12];
+  byte addr[8];
+
+  if ( !ds.search(addr)) {
+      //no more sensors on chain, reset search
+      ds.reset_search();
+      return -1000;
+  }
+
+  if ( OneWire::crc8( addr, 7) != addr[7]) {
+      Serial.println("CRC is not valid!");
+      return -1000;
+  }
+
+  if ( addr[0] != 0x10 && addr[0] != 0x28) {
+      Serial.print("Device is not recognized");
+      return -1000;
+  }
+
+  ds.reset();
+  ds.select(addr);
+  ds.write(0x44,1); // start conversion, with parasite power on at the end
+
+  byte present = ds.reset();
+  ds.select(addr);    
+  ds.write(0xBE); // Read Scratchpad
+
+  for (int i = 0; i < 9; i++) { // we need 9 bytes
+    data[i] = ds.read();
+  }
+
+  ds.reset_search();
+
+  byte MSB = data[1];
+  byte LSB = data[0];
+
+  float tempRead = ((MSB << 8) | LSB); //using two's compliment
+  float TemperatureSum = tempRead / 16;
+
+  return (TemperatureSum * 18 + 5)/10 + 32;
+}
+

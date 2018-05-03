@@ -4,7 +4,7 @@
 */
  
 #include <SPI.h>
-#include <Ethernet.h>
+#include <Ethernet2.h>
  
 // this must be unique
 byte mac[] = {
@@ -26,9 +26,9 @@ void setup()
   Serial.begin(115200);
   pinMode(4,OUTPUT);
   digitalWrite(4,HIGH);
-  Ethernet.begin(mac);
+  Ethernet.begin(mac,ip);
   delay(2000);
-  Serial.println(F("Ready. Press 'e' to send."));
+  Serial.println(("Ready. Press 'e' to send."));
 }
  
 void loop()
@@ -39,8 +39,8 @@ void loop()
  
   if(inChar == 'e')
   {
-      if(sendEmail()) Serial.println(F("Email sent"));
-      else Serial.println(F("Email failed"));
+      if(sendEmail()) Serial.println(("Email sent"));
+      else Serial.println(("Email failed"));
   }
 }
  
@@ -50,9 +50,9 @@ byte sendEmail()
   byte respCode;
  
   if(client.connect(server,port) == 1) {
-    Serial.println(F("connected"));
+    Serial.println(("connected"));
   } else {
-    Serial.println(F("connection failed"));
+    Serial.println(("connection failed"));
     return 0;
   }
  

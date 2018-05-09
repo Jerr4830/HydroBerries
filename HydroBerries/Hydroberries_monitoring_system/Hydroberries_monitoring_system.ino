@@ -70,16 +70,28 @@
 // Module identifier
 String MODULE_NUMBER = "A.0";
 
-int numModules = 1;
-
 // MAC address for the controller
 byte mac[] = {
   0x90, 0xA2, 0xDA, 0x11, 0x19, 0x19
 };
 
-//byte mac[] = {
-//  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
-//};
+IPAddress ip(129,21,61,177);                        // static ip address
+
+EthernetServer server(80);                          // server variable for website
+
+int emailPort = 2525;                               // port for the email server
+
+unsigned int localPort = 8080;                      // local port for UDP
+
+String username = "";                               // base64 encoded user
+
+String password = "";                                // base64 encoded password
+
+String recipient_email = "To: <recipient@address.com>";             // recipient's email address
+
+String sender_email = "From: <sender@address.com>";       // sender's email address
+
+int numModules = 1;                                           // current number of modules
 
 int packetSize = 0;
 
@@ -89,10 +101,7 @@ String modInfo[MAX_NUM][3];
 // modData{modules{Sensors{value,status,minValue,maxValue}}}
 String modData[MAX_NUM][6][4];
 /* Ethernet  variables */
-// static ip address
-IPAddress ip(129,21,61,177);
 
-EthernetServer server(80);                          // server variable for website
 
 EthernetClient emailClient;                         // ethernet client for email
 
@@ -102,13 +111,10 @@ int emailFlag = 0;
 
 char emailServer[] = "mail.smtp2go.com";            // SMTP server to send email
 
-int emailPort = 2525;                               // port for the email server
-
 EthernetUDP serverUDP;                              // server variable for udp communication
 
-unsigned int localPort = 8080;                      // local port for UDP
-
 char udpBuffer[100];                                // buffer to hold incoming packet
+
 // -------------------------------------------------------------------------------------------------------------------
 
 /* Variables for water temperature sensor */
@@ -181,21 +187,17 @@ String levelStatus = "OK";                          // current status of the lev
 
 
 /* variable for sensor testing */
-bool testing = true;                                // Enable/Disable ethernet connection
-bool mult_client = false;                           // Enable/Disable udp communication
-int measNum = 0;
-
 String dataString = "";                             // formatting string to write data to SD card
 
-int doTime = 2400;
+int doTime = 2400;                                  // timer for D.O. sensor
 
-int sTime = 30;
+int phTime = 3000;                                  // timer for pH sensor
 
-int phTime = 3000;
+int ecTime = 28800;                                 // timer ro E.C. sensor
 
-int ecTime = 3600;
+int timeout = 0;                                    // 24 hour timer
 
-int timeout = 0;
+int sTime = 30;                                     // time for remaining sensors
 
 String labels[] = {"Temperature ","Electrical Conductivity ","Dissolved Oxygen ","pH ","Level ","Flow "};
 
@@ -343,7 +345,7 @@ void setup() {
   Serial.println(Ethernet.localIP());
   delay(1000);
   
-//  serverUDP.begin(localPort);                       // start UDP server
+  serverUDP.begin(localPort);                       // start UDP server
 
   initArray();                                      // initialize arrays
   
@@ -625,42 +627,42 @@ void getEC(){
  */
 void loop() {
   dataString = "";  
-  int lcv = 0;                                        // loop counter variable
+  int lcv = 0;                                                // loop counter variable
 
-//  packetSize = serverUDP.parsePacket();                       // check if data has been sent to the server
-//
-//  if (packetSize){                                            // if a packet has been received    
-//    serverUDP.read(udpBuffer,100);                            // read UDP data into buffer
-//    getModData(serverUDP.remoteIP(), serverUDP.remotePort()); // format data received
-//    Serial.println("received");                               // print received to terminal
-//  }/* if (packetSize) */
+  packetSize = serverUDP.parsePacket();                       // check if data has been sent to the server
+
+  if (packetSize){                                            // if a packet has been received    
+    serverUDP.read(udpBuffer,100);                            // read UDP data into buffer
+    getModData(serverUDP.remoteIP(), serverUDP.remotePort()); // format data received
+    Serial.println("received");                               // print received to terminal
+  }/* if (packetSize) */
   
   
   // get sensor data
-  if (ecTime == 3600){           // every 8 hours
-    getEC();                      // get EC data
-    ecTime = 0;                   // reset ec counter
-    delay(1000);                  // wait for 1000 ms
+  if (ecTime == 28800){                                       // every 8 hours
+    getEC();                                                  // get EC data
+    ecTime = 0;                                               // reset ec counter
+    delay(1000);                                              // wait for 1000 ms
   }/* if (ecTime) */
   
-  if (doTime == 2400){            // every 40 mins
-    getDissolvedOxygen();         // get d.o. value
-    doTime = 0;                   // reset oxygen counter
-    delay(500);                   // wait for 500 ms
+  if (doTime == 2400){                                        // every 40 mins
+    getDissolvedOxygen();                                     // get d.o. value
+    doTime = 0;                                               // reset oxygen counter
+    delay(500);                                               // wait for 500 ms
   }/* if (doTime) */
 
-  if (phTime == 3000){            // every 50 mins
-    getPH();                      // get pH value
-    phTime = 0;                   // reset pH counter
-    delay(500);                   // wait for 500 ms
+  if (phTime == 3000){                                        // every 50 mins
+    getPH();                                                  // get pH value
+    phTime = 0;                                               // reset pH counter
+    delay(500);                                               // wait for 500 ms
   }/* if (phTime)*/
 
-  if (sTime == 30){               // every 30 mins
-    getTemp();                    // get the temperature
-    getLevel();                   // get the water level
-    getFlow();                    // get the water flow
-    sTime = 0;                    // reset the counter
-//    Serial.println(dataString);
+  if (sTime == 30){                                           // every 30 mins
+    getTemp();                                                // get the temperature
+    getLevel();                                               // get the water level
+    getFlow();                                                // get the water flow
+    sTime = 0;                                                // reset the counter
+    Serial.println(dataString); 
   }/* if() */
   
   /* save data to data string */
@@ -676,16 +678,15 @@ void loop() {
   dataString += ",";         
   dataString += flowSensor;
 
-  // write data to file
-  if (timeout == 93600){          // every 24 hours
-    logData(measNum);
+  
+  if (timeout == 93600){                                      // every 24 hours
+    logData();                                                // write data to file
   } 
   Serial.println(dataString); 
-  
+    
+  checkStatus();                                              // check if sensor values are within limits
 
   //add data to modData array
-  checkStatus();
-  
   modData[0][0][0] = tempSensor;                              // temperature value
   modData[0][0][0] += " &#8457;";                             // temperature units
   modData[0][0][1] = tempStatus;                              // temperature status
@@ -716,12 +717,12 @@ void loop() {
   modData[0][3][3] = maxPH;                                   // pH maximum limit
 
   modData[0][4][0] = levelSensor;                             // level value
-  modData[0][4][0] += " cm";                                // level units
+  modData[0][4][0] += " cm";                                  // level units
   modData[0][4][1] = levelStatus;                             // level status
   modData[0][4][2] = minLevel;                                // level minimum limit
-  modData[0][4][2] += " cm";                                // level units
+  modData[0][4][2] += " cm";                                  // level units
   modData[0][4][3] = maxLevel;                                // level maximum limit
-  modData[0][4][3] += " cm";                                // level units
+  modData[0][4][3] += " cm";                                  // level units
 
   modData[0][5][0] = flowSensor;                              // flow value
   modData[0][5][0] += " gal/min";                             // flow units
@@ -735,7 +736,7 @@ void loop() {
   // update website data
   EthernetClient client = server.available();                 // listen for incoming clients  
   if (client){                                                // if the server is available
-    Serial.println("Connection Successful");                // 
+    Serial.println("Connection Successful");
     while (client.connected()){                               // client is connected      
       
       if (client.available()){                                // client is avaliable
@@ -745,19 +746,19 @@ void loop() {
         
         if (c == '\n'){                                       // end of HTTP request
           client.println("HTTP/1.1 200 OK");                  // print HTTP header
-          client.println("Content-Type: text/html");          //
-          client.println("Refresh: 30");              // keep the system connected to the website
-          client.println();                                   //
+          client.println("Content-Type: text/html");
+          client.println("Refresh: 30");                      // refresh the website every 30 seconds
+          client.println();                                   
           displayData(client);                                // display sensor data to website        
           break;                                              // end the loop
         }/* if()*/
       }/* if() */
     }/* while() */
-    delay(1);                                                 //
+    delay(1);                                                 // wait for 1 ms
     client.stop();                                            // stop connection to server
-    Serial.println("client disconnected");                    //
+    Serial.println("client disconnected");
   } else {                                                    
-    Serial.println("no connection");                          //
+    Serial.println("no connection");
   }      
   delay(1000);                                                // wait for 1 second
 
@@ -882,15 +883,14 @@ void checkStatus(){
   }
 
   if (levelSensor < minLevel){
-    levelStatus = "Over the limit";
+    levelStatus = "Under the limit";
     emailBuffer += "ALERT: The water in the tank is very low\n\n ";    
   } else if ((levelSensor > minLevel) && (levelSensor <= (minLevel*1.15))){
     levelStatus = "OK";
     emailBuffer += "WARNING: The water in the tank is getting low\n\n ";    
   }
   else {
-    levelStatus = "OK";
-    
+    levelStatus = "OK";    
   }
 
   if (flowSensor < minFlow){
@@ -904,11 +904,11 @@ void checkStatus(){
 
   
   // Send email to user
-//  if (sendEmail() ==  1){
-//    emailFlag = 0;    
-//  } else {
-//    emailFlag = 1;
-//  }/* if()*/
+  if (sendEmail() ==  1){
+    emailFlag = 0;    
+  } else {
+    emailFlag = 1;
+  }/* if()*/
   
   if (levelStatus.equals("under the limit")){
     digitalWrite(A10,HIGH);                                     // turn off water pump and heaters
@@ -948,7 +948,7 @@ byte sendEmail(){
   // username
   Serial.println(("Sending user"));
   // change to base64 encoded user
-  emailClient.println("amFzcGVlZHg3ODVAZ21haWwuY29t");
+  emailClient.println(username);
   
   if (!emailRcv()){
     return 0;
@@ -957,7 +957,7 @@ byte sendEmail(){
   //password
   Serial.println(("Sending password"));
   // base64 encode password
-  emailClient.println("QXJkdWlub0VtYWlsVGVzdGluZw==");
+  emailClient.println(password);
 
   if (!emailRcv()){
     return 0;
@@ -965,7 +965,7 @@ byte sendEmail(){
 
   // Sender's email
   Serial.println("Sending From");
-  emailClient.println("MAIL From: <jasspeedx785@gmail.com>");
+  emailClient.println("MAIL " + sender_email);
 
   if (!emailRcv()){
     return 0;
@@ -973,7 +973,7 @@ byte sendEmail(){
 
   // recipient address
   Serial.println("Sending To");
-  emailClient.println("RCPT To: <jra8788@rit.edu>");
+  emailClient.println("RCPT " + recipient_email);
 
   if (!emailRcv()){
     return 0;
@@ -986,14 +986,14 @@ byte sendEmail(){
   // Sending the email
   Serial.println(("Sending email"));
   
-  // recipuent's address
-  emailClient.println("To: <jra8788@rit.edu>");
+  // recipient's address
+  emailClient.println(recipient_email);
   
   // Sender's address
-  emailClient.println("From: <jaspeedx785@gmail.com>");
+  emailClient.println(sender_email);
 
   // mail subject
-  emailClient.println("Subject: Arduino Email Test");
+  emailClient.println("Subject: hydroponic Monitoring System Alert");
 
   // email body
   emailClient.println(emailBuffer);
@@ -1094,23 +1094,17 @@ void emailFail(){
  *        0 - if the data was succesfully written to the file
  *        1 - if the file was not found
  */
-int logData(int measNum){  
-  File dataFile = SD.open("logdata.txt", FILE_WRITE);  
+void logData(){  
+  File dataFile = SD.open("logdata.txt", FILE_WRITE);     // open text file
 
   // if the file is available write to it
-  if (dataFile) { 
-    if (measNum == 0){
-      dataFile.println("Time(min),Temperature(F),E.C. (ppm),D.O.(mg/L),pH,Flow(gpm)");  
-    }
-    dataFile.println(dataString);    
-    dataFile.close();                                         // close the file    
-    Serial.println("file opened"); 
-    return 0; 
-  } else {            // if the file isn't open return error
-    Serial.println("error opening file");
-    return 1;
-  }/* if() */
-  
+  if (dataFile) {    
+    dataFile.println(dataString);                         // write data to file
+    dataFile.close();                                     // close the file    
+    Serial.println("file opened");     
+  } else {                                                // if the file isn't open return error
+    Serial.println("error opening file");    
+  }/* if() */  
 }/* logData() */
 
 

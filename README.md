@@ -1,4 +1,4 @@
-# HydroBerries
+﻿# HydroBerries
 Arduino Software Setup
 
 Ethernet
@@ -65,25 +65,25 @@ Arduino Pin Setup
 
 References
 1. Temperature Sensor
-  •	Sensor Website: https://www.sparkfun.com/products/11050
-  •	Example Code: https://github.com/sparkfun/simple_sketches/tree/master/DS18B20 
+  a.	Sensor Website: https://www.sparkfun.com/products/11050
+  b.	Example Code: https://github.com/sparkfun/simple_sketches/tree/master/DS18B20 
 2. Electrical Conductivity 
-  •	Example Code: https://hackaday.io/project/7008-fly-wars-a-hackers-solution-to-world-hunger/log/24646-three-dollar-ec-ppm-meter-arduino 
+  a.	Example Code: https://hackaday.io/project/7008-fly-wars-a-hackers-solution-to-world-hunger/log/24646-three-dollar-ec-ppm-meter-arduino 
 3. Dissolved Oxygen Sensor
-  •	Sensor Website: https://www.atlas-scientific.com/dissolved-oxygen.html 
-  •	Example Code: https://www.atlas-scientific.com/_files/code/do-i2c.pdf 
+  a.	Sensor Website: https://www.atlas-scientific.com/dissolved-oxygen.html 
+  b.	Example Code: https://www.atlas-scientific.com/_files/code/do-i2c.pdf 
 4. pH Sensor
-  •	Sensor Website: https://www.atlas-scientific.com/ph.html 
-  •	Example Code: https://www.atlas-scientific.com/_files/code/ph-i2c.pdf  
+  a.	Sensor Website: https://www.atlas-scientific.com/ph.html 
+  b.	Example Code: https://www.atlas-scientific.com/_files/code/ph-i2c.pdf  
 5. Level Sensor
-  •	Sensor Website: https://www.robotshop.com/en/weatherproof-ultrasonic-sensor-separate-probe.html?gclid=EAIaIQobChMIzPi-z5Di1wIVFyWBCh0cnwzoEAkYBSABEgLe_fD_BwE 
-  •	Example Code : https://github.com/RobotShop/RB-Dfr-720_Weatherproof_Ultrasonic_Sensor_with_Separate_Probe 
+  a.	Sensor Website: https://www.robotshop.com/en/weatherproof-ultrasonic-sensor-separate-probe.html?gclid=EAIaIQobChMIzPi-z5Di1wIVFyWBCh0cnwzoEAkYBSABEgLe_fD_BwE 
+  b.	Example Code : https://github.com/RobotShop/RB-Dfr-720_Weatherproof_Ultrasonic_Sensor_with_Separate_Probe 
 6. Flow Sensor
-  •	Sensor Website: https://www.adafruit.com/product/828 
-  •	Example Code:  https://github.com/adafruit/Adafruit-Flow-Meter 
+  a.	Sensor Website: https://www.adafruit.com/product/828 
+  b.	Example Code:  https://github.com/adafruit/Adafruit-Flow-Meter 
 7. Email Example Code
-  •	https://playground.arduino.cc/Code/Email 
+  a.	https://playground.arduino.cc/Code/Email 
 8. Ethernet Library Example
-  •	Web Server: https://www.arduino.cc/en/Tutorial/WebServer
-  •	Web Client: https://www.arduino.cc/en/Tutorial/WebClient 
-  •	Use Ethernet2.h instead of Ethernet.h for the ethernet library
+  a.	Web Server: https://www.arduino.cc/en/Tutorial/WebServer
+  b.	Web Client: https://www.arduino.cc/en/Tutorial/WebClient 
+  c.	Use Ethernet2.h instead of Ethernet.h for the ethernet library

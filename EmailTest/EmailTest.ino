@@ -69,24 +69,24 @@ byte sendEmail()
  
   Serial.println(F("Sending User"));
 // Change to your base64 encoded user
-  client.println("amFzcGVlZHg3ODVAZ21haWwuY29t");
+  client.println(" ");
  
   if(!eRcv()) return 0;
  
   Serial.println(F("Sending Password"));
 // change to your base64 encoded password
-  client.println("QXJkdWlub0VtYWlsVGVzdGluZw==");
+  client.println(" ");
  
   if(!eRcv()) return 0;
  
 // change to your email address (sender)
   Serial.println(F("Sending From"));
-  client.println("MAIL From: <jaspeedx785@gmail.com>");
+  client.println("MAIL From: <sender@addres.com>");
   if(!eRcv()) return 0;
  
 // change to recipient address
   Serial.println(F("Sending To"));
-  client.println("RCPT To: <jra8788@rit.edu>");
+  client.println("RCPT To: <recipient@address.com>");
   if(!eRcv()) return 0;
  
   Serial.println(F("Sending DATA"));
@@ -96,10 +96,10 @@ byte sendEmail()
   Serial.println(F("Sending email"));
  
 // change to recipient address
-  client.println("To: You <jra8788@rit.edu>");
+  client.println("To: You <recipient@address.com>");
  
 // change to your address
-  client.println("From: Me <jaspeedx785@gmail.com>");
+  client.println("From: Me <sender@address.com>");
  
   client.println("Subject: Arduino email test\r\n");
  
